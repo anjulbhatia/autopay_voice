@@ -29,7 +29,7 @@ def test_rank_shapes(tmp_path):
 
 def test_verify_gate_and_links(tmp_path):
     conn = seed_db(tmp_path)
-    call = tools.start_call("CUST001", mode="sim", conn=conn)
+    call = tools.start_call("CUST001", mode="sim", enforce_hours=False, source="dashboard", conn=conn)
     assert call["tier"] in ("short", "standard", "extended")
     assert tools.get_failed_payment(call["call_id"], conn)["refused"] is True
     assert tools.verify_identity(call["call_id"], "wrong", conn)["ok"] is False
@@ -44,7 +44,7 @@ def test_verify_gate_and_links(tmp_path):
          "Year?", hashlib.sha256((salt + answer).encode()).hexdigest(), salt),
     )
     conn.commit()
-    call2 = tools.start_call("CUST099", mode="sim", conn=conn)
+    call2 = tools.start_call("CUST099", mode="sim", enforce_hours=False, source="dashboard", conn=conn)
     assert tools.verify_identity(call2["call_id"], answer, conn)["ok"] is True
     assert tools.get_failed_payment(call2["call_id"], conn)["amount_due"] == 1500.0
 

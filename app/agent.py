@@ -4,9 +4,14 @@ Verification stays mandatory before disclosure (enforced in tools.py).
 'Suspicious' here means: exhausted tries, possible third party, or anomaly —
 those get the generic message and an early human, never details.
 """
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 agent_dir = Path(__file__).resolve().parent.parent / "agent"
+
+call_open_hour = 9
+call_close_hour = 21  # IST wall clock; seed numbers are +91
+ist = timezone(timedelta(hours=5, minutes=30))
 
 tier_budget = {"short": 90, "standard": 180, "extended": 300}
 tier_handoff_at = {"short": None, "standard": 150, "extended": 120}
@@ -77,3 +82,33 @@ def suspicious(call):
     if call["outcome"] == "wrong_person":
         return True
     return not call["verified"] and call["verify_attempts"] >= 2
+
+
+def calling_allowed(now=None):
+    """Hard calling-hours gate: 09:00–21:00 IST. Pure (pass now in tests)."""
+    moment = now or datetime.now(timezone.utc)
+    local = moment.astimezone(ist)
+    return call_open_hour <= local.hour < call_close_hour
+
+
+def generic_message():
+    """The ONLY text for wrong person / voicemail / unverified callers."""
+    return ("Hello, I am calling on behalf of the merchant about a billing matter. "
+            "I cannot share details until I confirm I am speaking with the right person. "
+            "Please call back on the number in your app, or I can arrange a callback.")
+
+
+threat_phrases = ["court", "police", "legal action", "blacklist", "account blocked",
+                  "last warning", "warrant", "lawsuit"]
+credential_phrases = ["otp", "cvv", "upi pin", "card number", "password", "pin number"]
+identity_lies = ["i am human", "i'm human", "i am not an ai", "i'm not a bot"]
+
+
+def judge_scan(transcript):
+    """Heuristic post-call guardrail scan (LLM judge plugs in later).
+    Returns passed + violation list; caller stores it as judge_json."""
+    low = (transcript or "").lower()
+    violations = ([f"threat/legal language: {p!r}" for p in threat_phrases if p in low]
+                  + [f"credential request: {p!r}" for p in credential_phrases if p in low]
+                  + ["identity deception" for p in identity_lies if p in low])
+    return {"passed": not violations, "violations": violations}
