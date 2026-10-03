@@ -7,8 +7,7 @@ Full spec: [`AGENT.md`](AGENT.md).
 
 ```sh
 uv sync
-uv run autopay              # backend on :8000 (seeds the db first run)
-uv run autopay --dash       # backend + merchant dashboard
+uv run autopay              # api + pay page + merchant console on :8000 (seeds the db first run)
 uv run autopay test         # tests
 ```
 

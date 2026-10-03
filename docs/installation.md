@@ -9,8 +9,7 @@ cp .env.example .env   # then fill VAPI_API_KEY for real calls
 
 | Command | What it does |
 |---|---|
-| `uv run autopay` | seed db if missing, serve backend on `:8000` |
-| `uv run autopay --dash` | backend + merchant dashboard |
+| `uv run autopay` | seed db if missing, serve api + pay page + merchant console on `:8000` |
 | `uv run autopay test` | pytest |
 | `uv run autopay help` | full help |
 

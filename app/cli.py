@@ -1,8 +1,7 @@
 """autopay launcher (stdlib only). Installed as the `autopay` command.
 
 usage:
-  uv run autopay              serve backend (default; seeds db first if missing)
-  uv run autopay --dash       backend + merchant console at /console
+  uv run autopay              serve backend + pay page + merchant console (seeds db first if missing)
   uv run autopay test         run pytest
   uv run autopay mcp          launch mcp server (built last per spec)
   uv run autopay help         show help
@@ -29,6 +28,7 @@ def ensure_db():
 
 def serve():
     ensure_db()
+    print("api + pay page + merchant console: http://127.0.0.1:8000/console")
     subprocess.run(backend_cmd, cwd=root)
 
 
@@ -47,19 +47,11 @@ def mcp():
     raise SystemExit(proc.returncode)
 
 
-def serve_with_dash():
-    # console ships with the backend (/console) — flag kept for muscle memory
-    print("merchant console: http://127.0.0.1:8000/console")
-    serve()
-
-
 def build_parser():
     parser = argparse.ArgumentParser(prog="autopay", description="autopay_voice launcher (synthetic demo).")
     parser.add_argument("target", nargs="?", default="serve",
                         choices=["serve", "test", "tests", "mcp", "help"],
                         help="what to run (default: serve).")
-    parser.add_argument("--dash", action="store_true",
-                        help="run backend + streamlit dashboard together.")
     return parser
 
 
@@ -68,8 +60,6 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.target == "help":
         parser.print_help()
-    elif args.dash:
-        serve_with_dash()
     elif args.target in ("test", "tests"):
         test()
     elif args.target == "mcp":
