@@ -1,0 +1,207 @@
+<!doctype html>
+<html>
+  <head>
+    <title> Autopay Link | {{merchant_name}}</title>
+    <link rel="icon" type="image/png" href="/assets/pay_icon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#e4c5ff" />
+
+    <!-- Tailwind CSS for content styling -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-primary: #e4c5ff;
+        --color-primary-foreground: #2b0a49;
+      }
+    </style>
+
+    <!-- HTMX library for making AJAX requests and handling dynamic content -->
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.11/dist/htmx.min.js"
+          integrity="sha384-2OatzQy1H+Zd/IIrjr1TcuDGqLXeHhbooAyJY1KdQMKnr4LZ22k31GBLdYKHmVjg"
+          crossorigin="anonymous">
+    </script>
+
+    <!-- Hugeicons CDN -->
+    <link rel="stylesheet" href="https://use.hugeicons.com/font/icons.css" />
+
+    <!-- Anime.js for micro animations -->
+    <script src="https://cdn.jsdelivr.net/npm/animejs/dist/bundles/anime.umd.min.js"></script>
+
+  </head>
+  <body class="smooth-scroll antialised bg-white overflow-x-hidden">
+    <header class="absolute w-full">
+        <div class="flex h-12 w-full lg:w-3/5 mx-auto items-center justify-between px-6 border-b-[1.2px] border-b-gray-300">
+            <span class="flex gap-1 items-center">
+                <img src="/assets/pay_icon.png" width="22" height="22" alt="AutoPay icon" />
+                <h3 class="font-bold text-xl text-primary-foreground">
+                    AutoPay
+                </h3>
+            </span>
+
+        <span class="flex items-center gap-2">
+            <span class="group text-neutral-500 hover:text-neutral-700 cursor-pointer flex items-center" tabindex="0">
+                <i class="hgi hgi-stroke hgi-rounded hgi-information-square my-auto"></i>
+                <div class="hidden group-hover:flex group-focus-within:flex isolate absolute flex w-64 mx-auto z-20 top-12 bg-white shadow-md rounded-lg p-3">
+                    <p class="text-sm text-neutral-700">This is a <strong>demo website</strong>. It is not affiliated with any merchant or payments platform. Kindly do not enter sensitive information like passwords, bank details, OTPs, or card PINs.</p>
+                </div>
+            </span>
+            <button class="bg-primary text-primary-foreground font-semibold text-normal px-2 py-1 rounded-full cursor-pointer hover:bg-primary-foreground hover:text-primary">
+                Log In
+            </button>
+        </span>
+        </div>
+    </header>
+    <main data-token="{{ token_id }}" class="flex flex-col justify-between w-full sm:w-3/5 mx-auto px-6 pt-16">
+    <div class="flex flex-col gap-2">
+    <ol id="step-dots" class="mb-6 flex items-center justify-center gap-2" aria-label="Progress">
+        <li id="step-dot-1" class="h-2 w-8 rounded-full bg-primary-foreground"></li>
+        <li id="step-dot-2" class="h-2 w-8 rounded-full bg-gray-300"></li>
+        <li id="step-dot-3" class="h-2 w-8 rounded-full bg-gray-300"></li>
+    </ol>
+    </div>
+
+      <!-- Step 1: payment summary -->
+      <section id="pay-summary" data-step="1" class="step flex flex-col min-h-80 w-full py-2 text-center my-auto justify-between">
+        <span class="flex gap-1 items-center mx-auto text-xs text-primary-foreground bg-primary/20 py-1 px-3 rounded-full mb-2">
+          <i class="hgi hgi-stroke hgi-rounded hgi-information-square"></i>
+          <span>Caution: <b>Demo Website</b> Don't add sensitive information</span>
+      </span>
+
+        <h1 class="text-center text-2xl font-bold tracking-tight mt-12">
+            {{merchant_name}}
+        </h1>
+        <h2 class="text-3xl font-bold text-primary-foreground tracking-wide font-mono">
+          {% if amount_due %}{{ '₹' if currency == 'INR' else '$' }}{{ '{:,.2f}'.format(amount_due) }}{% else %}$ 0.00{% endif %}
+        </h2>
+        <p class="mt-1 text-sm text-neutral-600">
+          This link expires in <span id="expiry-ticker" data-expires-seconds="600" class="inline-block rounded-md bg-neutral-200 px-2 py-0.5 font-mono font-semibold text-primary-foreground">10:00</span>
+        </p>
+        <p id="expiry-note" class="hidden mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">This link has expired. Please request a fresh link.</p>
+        <div class="mx-auto mt-4 min-w-[85%] divide-y divide-neutral-100 text-left text-sm">
+          <div class="flex items-center justify-between gap-4 py-1.5">
+            <span class="text-neutral-500">Customer</span>
+            <span class="font-medium text-neutral-800">{{ customer_name or 'Guest customer' }}</span>
+          </div>
+          <div class="flex items-center justify-between gap-4 py-1.5">
+            <span class="text-neutral-500">Phone</span>
+            <span class="font-mono text-neutral-800">{{ phone or '+91 90000 00001' }}</span>
+          </div>
+          <div class="flex items-center justify-between gap-4 py-1.5">
+            <span class="text-neutral-500">Transaction ID</span>
+            <span class="font-mono text-neutral-800">{{ transaction_id or token_id or "fbe7e349b201c837" }}</span>
+          </div>
+        </div>
+        <button id="continue-btn" type="button"
+                class="mt-6 max-sm:mt-12 capitalize rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-foreground hover:text-primary disabled:cursor-not-allowed disabled:border disabled:border-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400 disabled:hover:bg-neutral-100">
+            {% if amount_due %}Pay {{ '₹' if currency == 'INR' else '$' }}{{ '{:,.2f}'.format(amount_due) }} Securely {% else %}Pay Securely{% endif %}
+        </button>
+      </section>
+
+      <!-- Step 2: bank details -->
+      <section id="bank-details" data-step="2" class="step hidden py-2">
+        <span class="flex gap-1 items-center mx-auto text-xs text-primary-foreground bg-primary/20 py-1 px-3 rounded-full mb-4">
+          <i class="hgi hgi-stroke hgi-rounded hgi-information-square"></i>
+          <span>Caution: <b>Demo Website</b> Don't add sensitive information</span>
+      </span>
+        <span class="flex gap-3 items-center">
+        <button id="back-btn" type="button" aria-label="Back to summary"
+                class="mb-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:text-neutral-900">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        </button>
+        <h2 class="text-lg font-semibold text-primary-foreground">Payment details</h2>
+        <p id="expiry-note-2" class="hidden mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">This link has expired. Please request a fresh link.</p>
+        </span>
+        <form id="pay-form" class="mt-4 flex flex-col gap-4" novalidate autocomplete="off">
+          <div class="flex gap-2" role="group" aria-label="Payment method">
+            <button id="method-card" type="button" aria-pressed="true"
+                    class="rounded-full bg-primary-foreground px-4 py-1.5 text-sm font-semibold text-white">
+              Card
+            </button>
+            <button id="method-upi" type="button" aria-pressed="false"
+                    class="rounded-full bg-neutral-100 px-4 py-1.5 text-sm font-semibold text-neutral-600 hover:bg-neutral-200">
+              UPI
+            </button>
+          </div>
+          <div id="fields-card" class="flex flex-col gap-4">
+          <div>
+            <label for="acc-holder" class="text-sm font-medium text-neutral-700">Account holder name</label>
+            <input id="acc-holder" name="acc-holder" type="text" autocomplete="off" readonly
+                   onfocus="this.removeAttribute('readonly')"
+                   value="{{ customer_name or '' }}" placeholder="Full name as on card"
+                   class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-foreground focus:outline-none" />
+            <p id="err-acc-holder" class="hidden mt-1 text-sm text-red-600"></p>
+          </div>
+          <div>
+            <label for="card-number" class="text-sm font-medium text-neutral-700">Card number</label>
+            <input id="card-number" name="card-number" type="text" inputmode="numeric" autocomplete="off" readonly
+                   onfocus="this.removeAttribute('readonly')"
+                   placeholder="1234 5678 9012 3456" maxlength="19"
+                   class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm focus:border-primary-foreground focus:outline-none" />
+            <p id="err-card-number" class="hidden mt-1 text-sm text-red-600"></p>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label for="card-expiry" class="text-sm font-medium text-neutral-700">Expiry (MM/YY)</label>
+              <input id="card-expiry" name="card-expiry" type="text" inputmode="numeric" autocomplete="off" readonly
+                     onfocus="this.removeAttribute('readonly')"
+                     placeholder="MM/YY" maxlength="5"
+                     class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm focus:border-primary-foreground focus:outline-none" />
+              <p id="err-card-expiry" class="hidden mt-1 text-sm text-red-600"></p>
+            </div>
+            <div>
+              <label for="card-cvv" class="text-sm font-medium text-neutral-700">CVV</label>
+              <input id="card-cvv" name="card-cvv" type="password" inputmode="numeric" autocomplete="off" readonly
+                     onfocus="this.removeAttribute('readonly')"
+                     placeholder="•••" maxlength="3"
+                     class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm focus:border-primary-foreground focus:outline-none" />
+            <p id="err-card-cvv" class="hidden mt-1 text-sm text-red-600"></p>
+            </div>
+          </div>
+          </div>
+          <div id="fields-upi" class="hidden flex-col gap-4">
+            <div>
+              <label for="upi-id" class="text-sm font-medium text-neutral-700">UPI ID</label>
+              <input id="upi-id" name="upi-id" type="text" autocomplete="off" readonly
+                     onfocus="this.removeAttribute('readonly')"
+                     placeholder="name@bank" maxlength="64"
+                     class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm focus:border-primary-foreground focus:outline-none" />
+              <p id="err-upi-id" class="hidden mt-1 text-sm text-red-600"></p>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-3 max-sm:sticky max-sm:bottom-0 max-sm:py-3 mx-auto">
+            <button id="fail-btn" type="button" class="text-sm text-neutral-500 underline underline-offset-2 hover:text-neutral-700">
+              Simulate failed payment
+            </button>
+            <button id="pay-btn" type="submit"
+                    class="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-foreground hover:text-primary disabled:cursor-not-allowed disabled:border disabled:border-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400 disabled:hover:bg-neutral-100">
+              Pay Securely
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Step 3: payment outcome (terminal — no back navigation) -->
+      <section id="payment-status" data-step="3" class="step hidden py-2 text-center">
+        <div id="status-processing">
+          <h2 class="text-lg font-semibold text-primary-foreground">Processing…</h2>
+          <p class="mt-1 text-sm text-neutral-500">Contacting your bank. Do not refresh.</p>
+        </div>
+        <div id="status-success" class="hidden">
+          <h2 class="text-lg font-semibold text-green-700">Payment successful</h2>
+          <p class="mt-1 text-sm text-neutral-600">Your autopay dues are cleared. Reference: <span id="pay-ref" class="font-mono font-semibold"></span></p>
+        </div>
+        <div id="status-failed" class="hidden">
+          <h2 class="text-lg font-semibold text-red-700">Payment failed</h2>
+          <p class="mt-1 text-sm text-neutral-600">The bank declined this attempt. No money was deducted. You can retry or ask for a fresh link.</p>
+          <button id="retry-btn" type="button"
+                  class="mt-4 rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-foreground hover:text-primary">
+            Try again
+          </button>
+        </div>
+      </section>
+    </main>
+    <script src="/assets/validations.js"></script>
+    <script src="/assets/app.js"></script>
+  </body>
+</html>
