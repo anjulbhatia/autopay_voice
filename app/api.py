@@ -125,19 +125,22 @@ async def vapi_tool(request: Request):
             return {"error": "unknown call; only the generic message may be spoken"}
         call_id = row["call_id"]
         base_url = os.environ.get("BASE_URL", "")
-        if name == "verify_identity":
-            return {"result": tools.verify_identity(call_id, args.get("answer"), conn)}
-        if name == "get_failed_payment":
-            return {"result": tools.get_failed_payment(call_id, conn)}
-        if name == "send_payment_link":
-            return {"result": tools.send_payment_link(call_id, args.get("channel", "console"), base_url, conn)}
-        if name == "schedule_retry":
-            return {"result": tools.schedule_retry(call_id, args.get("when"), conn)}
-        if name == "request_human_handoff":
-            return {"result": tools.request_human_handoff(call_id, args.get("reason", "asked_for_human"),
-                                                          args.get("notes", ""), conn)}
-        if name == "log_outcome":
-            return {"result": tools.log_outcome(call_id, args.get("result", "failed"), args.get("notes", ""), conn)}
+        try:
+            if name == "verify_identity":
+                return {"result": tools.verify_identity(call_id, args.get("answer"), conn)}
+            if name == "get_failed_payment":
+                return {"result": tools.get_failed_payment(call_id, conn)}
+            if name == "send_payment_link":
+                return {"result": tools.send_payment_link(call_id, args.get("channel", "console"), base_url, conn)}
+            if name == "schedule_retry":
+                return {"result": tools.schedule_retry(call_id, args.get("when"), conn)}
+            if name == "request_human_handoff":
+                return {"result": tools.request_human_handoff(call_id, args.get("reason", "asked_for_human"),
+                                                              args.get("notes", ""), conn)}
+            if name == "log_outcome":
+                return {"result": tools.log_outcome(call_id, args.get("result", "failed"), args.get("notes", ""), conn)}
+        except ValueError as exc:
+            return {"error": str(exc)}
         return {"error": f"unknown tool {name!r}"}
     finally:
         conn.close()
@@ -161,7 +164,12 @@ async def vapi_events(request: Request):
         transcript = message.get("transcript") or message.get("summary") or ""
         verdict = agent_rules.judge_scan(transcript)
         ended = (message.get("endedReason") or "").lower()
-        mapped = "no_answer" if "no-answer" in ended or "did-not-answer" in ended else None
+        if "no-answer" in ended or "did-not-answer" in ended:
+            mapped = "no_answer"
+        elif row["outcome"] is None:
+            mapped = "failed"  # never leave a finished call open
+        else:
+            mapped = None
         conn.execute("update calls set transcript = ?, judge_json = ?, ended_at = ?,"
                      " outcome = coalesce(outcome, ?) where call_id = ?",
                      (transcript, json.dumps(verdict), utcnow(), mapped, row["call_id"]))
@@ -173,12 +181,21 @@ async def vapi_events(request: Request):
 
 @app.get("/pay/{token}", response_class=HTMLResponse)
 async def pay_page(request: Request, token: str):
-    # Real link lookup: unknown -> 404, used/expired -> dismissed render.
-    # currency drives the Jinja symbol pick (INR -> ₹, else $).
+    # Real link lookup: unknown -> 404, used/expired -> dismissed render
+    # (no amount/phone on dead links). currency drives Jinja symbol (INR -> ₹).
     from app.tools import get_link_context
     found = get_link_context(token)
     if found["status"] == "unknown":
         raise HTTPException(status_code=404, detail="unknown token")
+    if found["status"] != "ok":
+        code = 409 if found["status"] == "used" else 410
+        word = "already used" if found["status"] == "used" else "expired"
+        return HTMLResponse(
+            status_code=code,
+            content=(f"<main style='font-family:sans-serif;max-width:480px;margin:10vh auto;text-align:center'>"
+                     f"<h1>Link {word}</h1>"
+                     f"<p>This payment link is {word}. Please request a fresh link.</p></main>"),
+        )
     customer = found["customer"]
     return templates.TemplateResponse(
         request=request,
@@ -209,7 +226,10 @@ async def console_page(request: Request):
     finally:
         conn.close()
     from app import tools as campaign_tools
-    queue_count = len(campaign_tools.masked_queue()["eligible"])
+    queue = campaign_tools.masked_queue()
+    queue_count = len(queue["eligible"])
+    eligible_ids = {c["customer_id"] for c in queue["eligible"]}
+    customers.sort(key=lambda c: (c["customer_id"] not in eligible_ids, c["customer_id"]))
     return templates.TemplateResponse(
         request=request, name="console.html",
         context={"customers": customers, "funnel": funnel,
@@ -262,22 +282,31 @@ async def partial_calls(q: str = "", outcome: str = "all"):
 @app.post("/partials/calls/outcome", response_class=HTMLResponse)
 async def partial_outcome(request: Request):
     body = await _payload(request)
-    tools.log_outcome(int(body.get("call_id", 0)), body.get("outcome", "failed"),
-                      str(body.get("notes", ""))[:200])
+    try:
+        tools.log_outcome(int(body.get("call_id", 0)), body.get("outcome", "failed"),
+                          str(body.get("notes", ""))[:200])
+    except (TypeError, ValueError) as exc:
+        return dash.message(str(exc), good=False)
     return dash.message(f"call {body.get('call_id')} → {body.get('outcome')}")
 
 
 @app.post("/partials/calls/cut", response_class=HTMLResponse)
 async def partial_cut(request: Request):
     body = await _payload(request)
-    tools.log_outcome(int(body.get("call_id", 0)), "no_answer", "cut from console")
+    try:
+        tools.log_outcome(int(body.get("call_id", 0)), "no_answer", "cut from console")
+    except (TypeError, ValueError) as exc:
+        return dash.message(str(exc), good=False)
     return dash.message(f"call {body.get('call_id')} cut")
 
 
 @app.post("/partials/calls/join", response_class=HTMLResponse)
 async def partial_join(request: Request):
     body = await _payload(request)
-    result = tools.request_human_handoff(int(body.get("call_id", 0)), "human_joined", "merchant joined")
+    try:
+        result = tools.request_human_handoff(int(body.get("call_id", 0)), "human_joined", "merchant joined")
+    except (TypeError, ValueError) as exc:
+        return dash.message(str(exc), good=False)
     return dash.message(f"joined — handoff {result['handoff_id']} open")
 
 
@@ -293,7 +322,7 @@ async def partial_handoff_create(request: Request):
         result = tools.request_human_handoff(int(body.get("call_id", 0)),
                                              body.get("reason", "asked_for_human"),
                                              str(body.get("notes", ""))[:500])
-    except ValueError as exc:
+    except (TypeError, ValueError) as exc:
         return dash.message(str(exc), good=False)
     return dash.message(f"handoff {result['handoff_id']} open for call {body.get('call_id')}")
 
@@ -301,10 +330,14 @@ async def partial_handoff_create(request: Request):
 @app.post("/partials/handoffs/resolve", response_class=HTMLResponse)
 async def partial_resolve(request: Request):
     body = await _payload(request)
+    try:
+        handoff_id = int(body.get("handoff_id", 0))
+    except (TypeError, ValueError) as exc:
+        return dash.message(str(exc), good=False)
     conn = get_conn()
     try:
         conn.execute("update handoffs set status = 'done', resolved_at = ? where handoff_id = ?",
-                     (utcnow(), int(body.get("handoff_id", 0))))
+                     (utcnow(), handoff_id))
         tools.log_audit(conn, "merchant", "resolve_handoff",
                         f"handoff_id={body.get('handoff_id')}", "ok")
         conn.commit()
@@ -343,22 +376,43 @@ async def partial_handoff_detail(handoff_id: int):
 async def partial_link(request: Request):
     import os
     body = await _payload(request)
-    customer_id = body.get("customer_id", "")
+    customer_id = (body.get("customer_id") or "").strip()
     channel = body.get("channel", "console")
     call_id = body.get("call_id") or None
     try:
         call_id = int(call_id) if call_id else None
     except (TypeError, ValueError):
         call_id = None
-    link = tools.create_payment_link(customer_id, body.get("kind", "pay_now"), channel,
-                                     body.get("base_url") or None, int(body.get("ttl", 10)),
-                                     call_id=call_id)
+    try:
+        ttl = int(body.get("ttl", 10))
+    except (TypeError, ValueError):
+        return dash.message("bad ttl (1-1440 required)", good=False)
+    if channel not in tools.valid_link_channels:
+        return dash.message(f"unknown channel {channel!r}", good=False)
+    if body.get("kind", "pay_now") not in tools.valid_link_kinds:
+        return dash.message(f"unknown kind {body.get('kind')!r}", good=False)
+    if not 1 <= ttl <= 1440:
+        return dash.message("bad ttl (1-1440 required)", good=False)
     conn = get_conn()
     try:
         person = conn.execute("select name, phone, amount_due from customers where customer_id = ?",
                               (customer_id,)).fetchone()
     finally:
         conn.close()
+    if person is None:
+        raise HTTPException(status_code=404, detail="unknown customer")
+    try:
+        # Explicit base_url (console settings field) wins when it is a plain
+        # https origin; otherwise server BASE_URL env. Relative path when neither.
+        raw_base = (body.get("base_url") or "").strip() if isinstance(body.get("base_url"), str) else ""
+        if raw_base and not (raw_base.startswith("https://") and " " not in raw_base
+                             and '"' not in raw_base and "<" not in raw_base):
+            return dash.message("bad base_url (https:// origin required)", good=False)
+        link = tools.create_payment_link(customer_id, body.get("kind", "pay_now"), channel,
+                                         raw_base or os.environ.get("BASE_URL", "") or None, ttl,
+                                         call_id=call_id)
+    except ValueError as exc:
+        return dash.message(str(exc), good=False)
     text = channels.render(channel, person["name"], person["amount_due"], link["url"])
     receipt = channels.send(channel, mask_phone(person["phone"]), text)
     return (f"<p class='font-mono text-sm break-all bg-neutral-100 rounded px-2 py-1'>{link['url']}"

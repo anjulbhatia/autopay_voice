@@ -15,6 +15,10 @@ token_alphabet = "abcdefghjkmnpqrstuvwxyz23456789"  # no 0/O/1/l/I
 token_length = 6
 default_ttl_minutes = 10
 max_verify_attempts = 2
+valid_link_kinds = ("pay_now", "update_mandate")
+valid_link_channels = ("inapp", "console", "razorpay_notify", "whatsapp", "sms")
+valid_call_outcomes = ("link_sent", "retry_scheduled", "handoff", "no_answer",
+                       "wrong_person", "refused", "opted_out", "failed")
 
 
 def log_audit(conn, actor, tool, args_masked="", status="ok", call_id=None):
@@ -171,6 +175,14 @@ def create_payment_link(customer_id, kind="pay_now", channel="console", base_url
     (the cloudflared origin); empty means a relative /pay path for local use."""
     import os
     from datetime import datetime, timedelta, timezone
+    if kind not in valid_link_kinds:
+        raise ValueError(f"unknown link kind {kind!r}")
+    if channel not in valid_link_channels:
+        raise ValueError(f"unknown channel {channel!r}")
+    try:
+        ttl_minutes = int(ttl_minutes)
+    except (TypeError, ValueError):
+        raise ValueError(f"bad ttl {ttl_minutes!r}")
     base_url = base_url if base_url else os.environ.get("BASE_URL", "")
     own = conn is None
     conn = conn or get_conn()
@@ -195,7 +207,12 @@ def create_payment_link(customer_id, kind="pay_now", channel="console", base_url
 
 
 def send_payment_link(call_id, channel="console", base_url=None, conn=None):
-    """Voice path: verified calls only, mandate failures get an update-mandate link."""
+    """Voice path: verified calls only, mandate failures get an update-mandate link.
+    Renders + mock-sends through the channel adapter so the customer gets
+    something, and stamps last_message_at for ranking recency."""
+    from app import channels as channel_adapters
+    if channel not in valid_link_channels:
+        raise ValueError(f"unknown channel {channel!r}")
     own = conn is None
     conn = conn or get_conn()
     try:
@@ -206,8 +223,18 @@ def send_payment_link(call_id, channel="console", base_url=None, conn=None):
         kind_row = conn.execute("select failure_reason from customers where customer_id = ?",
                                 (call["customer_id"],)).fetchone()
         kind = "update_mandate" if kind_row["failure_reason"] == "mandate_expired" else "pay_now"
-        return {"refused": False, **create_payment_link(
-            call["customer_id"], kind, channel, base_url, default_ttl_minutes, call_id, conn)}
+        link = create_payment_link(
+            call["customer_id"], kind, channel, base_url, default_ttl_minutes, call_id, conn)
+        person = conn.execute("select name, phone, amount_due from customers where customer_id = ?",
+                              (call["customer_id"],)).fetchone()
+        text = channel_adapters.render(channel, person["name"], person["amount_due"], link["url"])
+        receipt = channel_adapters.send(channel, mask_phone(person["phone"]), text)
+        conn.execute("update customers set last_message_at = ? where customer_id = ?",
+                     (utcnow(), call["customer_id"]))
+        log_audit(conn, "agent", "send_payment_link",
+                  f"channel={receipt['channel']} status={receipt['status']}", "ok", call_id)
+        conn.commit()
+        return {"refused": False, **link, "send": receipt["status"]}
     finally:
         if own:
             conn.close()
@@ -236,21 +263,28 @@ def get_link_context(token, conn=None):
             remaining = max(0, int((datetime.fromisoformat(link["expires_at"])
                                     - datetime.now(timezone.utc)).total_seconds()))
         return {"status": status, "link": dict(link), "customer": dict(customer),
-                "expires_in": min(remaining, default_ttl_minutes * 60)}
+                "expires_in": remaining}
     finally:
         if own:
             conn.close()
 
 
 def schedule_retry(call_id, when, conn=None):
+    from datetime import datetime
+    try:
+        moment = datetime.fromisoformat(str(when))
+    except (TypeError, ValueError):
+        raise ValueError(f"bad retry date {when!r} (ISO-8601 required)")
+    if moment.tzinfo is None:
+        raise ValueError(f"bad retry date {when!r} (timezone-aware ISO-8601 required)")
     own = conn is None
     conn = conn or get_conn()
     try:
         conn.execute("update calls set outcome = 'retry_scheduled', retry_at = ? where call_id = ?",
-                     (when, call_id))
-        log_audit(conn, "agent", "schedule_retry", f"when={when}", "ok", call_id)
+                     (moment.isoformat(), call_id))
+        log_audit(conn, "agent", "schedule_retry", f"when={moment.isoformat()}", "ok", call_id)
         conn.commit()
-        return {"ok": True, "retry_at": when}
+        return {"ok": True, "retry_at": moment.isoformat()}
     finally:
         if own:
             conn.close()
@@ -277,15 +311,23 @@ def request_human_handoff(call_id, reason, notes="", conn=None):
 
 
 def log_outcome(call_id, outcome, notes="", conn=None):
+    if outcome not in valid_call_outcomes:
+        raise ValueError(f"unknown outcome {outcome!r}")
     own = conn is None
     conn = conn or get_conn()
     try:
         conn.execute("update calls set outcome = ?, ended_at = ? where call_id = ?",
                      (outcome, utcnow(), call_id))
         call = conn.execute("select customer_id from calls where call_id = ?", (call_id,)).fetchone()
+        if call is None:
+            raise ValueError(f"unknown call {call_id}")
         if outcome == "opted_out":
-            conn.execute("update customers set do_not_call = 1 where customer_id = ?",
+            conn.execute("update customers set do_not_call = 1, payment_status = 'opted_out'"
+                         " where customer_id = ? and payment_status != 'recovered'",
                          (call["customer_id"],))
+        elif outcome in ("link_sent", "handoff"):
+            conn.execute("update customers set payment_status = ? where customer_id = ?"
+                         " and payment_status != 'recovered'", (outcome, call["customer_id"]))
         log_audit(conn, "agent", "log_outcome", f"outcome={outcome} {notes}"[:200], "ok", call_id)
         conn.commit()
         return {"ok": True}

@@ -13,13 +13,14 @@
   `send_payment_link` return anything real. Until then they refuse.
 - Ask the exact `security_question` from context. Max 2 attempts.
 - After 2 failures → stop asking → `request_human_handoff("unverified")`
-  → `log_outcome("unverified", notes)`.
+  → `log_outcome("refused", notes)` (`refused` is the closest terminal
+  outcome the calls table accepts).
 
 ## 3. Failure-reason playbook
 | failure_reason | Say (plain words) | Offer |
 |---|---|---|
 | insufficient_balance | "There were not enough funds when autopay was tried." | payment link now, OR retry date they choose |
-| expired_mandate | "Your autopay permission has expired and needs renewal." | mandate-update link (via `send_payment_link`), no retry offered |
+| mandate_expired | "Your autopay permission has expired and needs renewal." | mandate-update link (via `send_payment_link`), no retry offered |
 | bank_decline | "Your bank declined the autopay attempt." | retry on a different day, OR pay via another method link |
 
 - Never invent a reason. Use only the value from `get_failed_payment`.
