@@ -3,10 +3,12 @@
 ```mermaid
 flowchart TB
     subgraph merchant["Merchant side"]
-        dash["Streamlit dashboard\nqueue · handoffs · audit"]
+        console["/console (HTMX)\nqueue · on-call rail · customers · observe"]
         human(["Human in loop\ntakes handoffs"])
     end
     subgraph backend["Backend (FastAPI + SQLite)"]
+        api["api.py\npages · partials · webhooks"]
+        dash["dash.py\nHTML partials (phones masked)"]
         tools["tools.py\nsingle shared logic"]
         rank["ranking.py\np_pay · tiers"]
         agentm["agent.py\nprompts · budgets"]
@@ -19,7 +21,9 @@ flowchart TB
         page["/pay/{token}\nsteps · 10-min link"]
     end
 
-    dash -->|"pick easiest / highest / manual"| tools
+    console -->|"pick mode / filter / manual"| api
+    api --> dash
+    api --> tools
     tools --> rank
     tools --> agentm
     agentm -->|"system prompt + server tools"| vapi
@@ -28,9 +32,9 @@ flowchart TB
     tools -->|"6-char link, BaseURL/pay/*"| page
     page -->|"/pay/result paid/failed"| tools
     tools -->|"open handoff"| human
-    human --> dash
+    human --> console
     mcp["MCP server\nthin wrapper"] --> tools
-    dash --> db
+    console --> db
     page --> db
 ```
 
@@ -47,12 +51,37 @@ flowchart TB
 - `app/agent.py` — prompt assembly + call decisions (tier budgets, tone,
   verification, anti-hallucination).
 - `app/provider.py` — Vapi REST wrapper (web-call default, phone opt-in).
-- `app/api.py` — `/pay/{token}`, `/pay/result`, Vapi webhooks.
+- `app/api.py` — pages (`/console`, `/pay/{token}`), HTMX partials
+  (`/partials/*`), Vapi webhooks (`/vapi/tool`, `/vapi/events`).
+- `app/dash.py` — server-rendered HTML partials for the console.
+  Phones masked, values escaped, one function per panel.
 - `app/channels.py` — link delivery adapters (console default, mock
   whatsapp/sms documented).
-- `web/` — Jinja pay page + `validations.js` (pure checks) + `app.js`
-  (steps, animations, backend notify).
-- `dashboard/app.py` — merchant tables + human-in-the-loop queue.
+- `app/cli.py` — `autopay` launcher: single serve path for api +
+  pay page + console, plus `test` and `mcp`.
+- `web/console.html` — merchant console shell: KPI strips, dial bar,
+  queue, on-call rail, customers, observe. Mobile: on-call first,
+  bottom nav bar.
+- `web/assets/console.js` — nav, ordered dial queue (localStorage),
+  active-call refresh, modal, settings.
+- `web/pay.html` — customer payment page; `validations.js` (pure checks)
+  + `app.js` (steps, animations, backend notify).
+
+## Console partials
+
+| Endpoint | Panel |
+|---|---|
+| `GET /partials/queue?mode=&q=&tier=` | ranked queue, checkbox per row |
+| `GET /partials/active-call` | latest open call + link + handoff forms |
+| `POST /partials/queue/start` | open a call for a customer |
+| `POST /partials/calls/outcome` · `/cut` · `/join` | close / cut / join live call |
+| `POST /partials/links` | mint + send link (binds `call_id` when on-call) |
+| `POST /partials/handoffs/create` · `/resolve` | open / resolve handoff |
+| `GET /partials/customers?q=&status=` + `/customers/{id}` | table + full record |
+| `GET /partials/calls/{id}` | transcript + linked handoff + call audit |
+| `GET /partials/calls?q=&outcome=` · `/handoffs?open=&q=` · `/audit?q=` | observe filters |
+
+Forms post urlencoded (htmx) or JSON (tests); the server accepts both.
 
 ## Link lifecycle
 
@@ -66,3 +95,4 @@ tokens 404 everywhere.
 
 Pass the public origin explicitly (`create_payment_link(..., base_url=...)`)
 so links render as `BaseURL/pay/[token]`. Local default is a relative path.
+The console stores it per-browser (Settings) and fills link forms with it.

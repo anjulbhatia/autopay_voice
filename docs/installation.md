@@ -13,13 +13,34 @@ cp .env.example .env   # then fill VAPI_API_KEY for real calls
 | `uv run autopay test` | pytest |
 | `uv run autopay help` | full help |
 
+Seed explicitly: `uv run python -m app.db` (idempotent).
+Override the db path: `DATABASE_URL="sqlite:///data/autopay_voice.db"`.
+
+## Tour (one server, three surfaces)
+
+| URL | Surface |
+|---|---|
+| `http://127.0.0.1:8000/console` | merchant console: queue, live calls, links, handoffs, audit |
+| `http://127.0.0.1:8000/pay/<token>` | customer payment page (token from a generated link) |
+| `POST /vapi/tool` · `POST /vapi/events` | voice webhooks (in-call dispatch, end-of-call report) |
+
+Calls start from the console only (`POST /partials/queue/start`);
+there is no auto-dialer.
+
+## Console tabs
+
+- **Calls** — KPI strip, dial bar (manual start, search, tier filter,
+  sort mode), queue with ordered dial checkboxes, on-call rail with
+  the live call, payment-link sender, and handoff opener bound to it.
+- **Customers** — KPI strip, search + status filter, click a row for
+  the full record (dues, security question, calls, links, handoffs).
+- **Observe** — call records (click for transcript + linked handoff +
+  call audit), handoffs, audit log; each with its own filter.
+
 Voice wiring: `agent/vapi_config.json` holds the assistant + 6 server tools
 pointing at `BASE_URL/vapi/tool` — replace `BASE_URL` with the deployed
 origin. Webhooks: `POST /vapi/tool` (in-call dispatch, always 200 with
 result/error), `POST /vapi/events` (end-of-call transcript + guardrail scan).
-
-Seed explicitly: `uv run python -m app.db` (idempotent).
-Override the db path: `DATABASE_URL="sqlite:///data/autopay_voice.db"`.
 
 ## Public payment links (demo)
 
