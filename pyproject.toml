@@ -8,9 +8,10 @@ dependencies = [
     "faker>=40.40.0",
     "fastapi>=0.142.2",
     "httpx>=0.28.1",
+    "jinja2>=3.1.6",
     "python-dotenv>=1.2.4",
-    "streamlit>=1.64.0",
-    "streamlit-extras>=1.6.0",
+    "python-multipart>=0.0.18",
+    "uvicorn>=0.54.0",
     "vapi-server-sdk>=1.11.1",
 ]
 

@@ -2,7 +2,7 @@
 
 usage:
   uv run autopay              serve backend (default; seeds db first if missing)
-  uv run autopay --dash       backend + streamlit dashboard together
+  uv run autopay --dash       backend + merchant console at /console
   uv run autopay test         run pytest
   uv run autopay mcp          launch mcp server (built last per spec)
   uv run autopay help         show help
@@ -15,7 +15,6 @@ from pathlib import Path
 root = Path(__file__).resolve().parent.parent
 backend_cmd = [sys.executable, "-m", "uvicorn", "app.api:app",
                "--host", "127.0.0.1", "--port", "8000"]
-dash_cmd = [sys.executable, "-m", "streamlit", "run", "dashboard/app.py"]
 
 
 def ensure_db():
@@ -49,16 +48,9 @@ def mcp():
 
 
 def serve_with_dash():
-    ensure_db()
-    procs = [subprocess.Popen(cmd, cwd=root) for cmd in (backend_cmd, dash_cmd)]
-    try:
-        for proc in procs:
-            proc.wait()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        for proc in procs:
-            proc.terminate()
+    # console ships with the backend (/console) — flag kept for muscle memory
+    print("merchant console: http://127.0.0.1:8000/console")
+    serve()
 
 
 def build_parser():
