@@ -1,24 +1,15 @@
-"""Shared campaign tools. FastAPI and MCP call these; no logic duplicated.
-
-Call binding: voice tools take call_id, never customer_id. The server maps
-call -> customer, so the model only ever sees its own customer.
-"""
 import json
+import os
 import secrets
-from pathlib import Path
+from datetime import datetime, timedelta, timezone
 
-from app import ranking
-from app.db import (count_calls_today, get_conn, init_db, mask_phone,
-                    repo_root, seed_from_json, utcnow, verify_security_answer)
-
-token_alphabet = "abcdefghjkmnpqrstuvwxyz23456789"  # no 0/O/1/l/I
-token_length = 6
-default_ttl_minutes = 10
-max_verify_attempts = 2
-valid_link_kinds = ("pay_now", "update_mandate")
-valid_link_channels = ("inapp", "console", "razorpay_notify", "whatsapp", "sms")
-valid_call_outcomes = ("link_sent", "retry_scheduled", "handoff", "no_answer",
-                       "wrong_person", "refused", "opted_out", "failed")
+from app import agent as agent_rules, channels, ranking
+from app.config import (DEFAULT_TTL_MINUTES, MAX_VERIFY_ATTEMPTS, TOKEN_ALPHABET,
+                        TOKEN_LENGTH, VALID_CALL_OUTCOMES, VALID_LINK_CHANNELS,
+                        VALID_LINK_KINDS, base_url as server_base_url)
+from app.db import (count_calls_today, get_conn, init_db, repo_root,
+                    seed_from_json, utcnow, verify_security_answer)
+from app.utils import mask_phone
 
 
 def log_audit(conn, actor, tool, args_masked="", status="ok", call_id=None):
@@ -58,7 +49,6 @@ def start_call(customer_id, mode="web", vapi_call_id=None, enforce_hours=True, s
     """Open a call row with a ranking snapshot; counts as an attempt.
     Hours gate on by default; sim/tests pass enforce_hours=False.
     For now calls start from the merchant dashboard only."""
-    from app import agent as agent_rules
     if source != "dashboard":
         raise ValueError("calls start from the merchant dashboard only (for now)")
     if enforce_hours and not agent_rules.calling_allowed():
@@ -108,8 +98,8 @@ def verify_identity(call_id, answer, conn=None):
     try:
         call = call_customer(call_id, conn)
         if call["verified"]:
-            return {"ok": True, "attempts_left": max_verify_attempts - call["verify_attempts"]}
-        if call["verify_attempts"] >= max_verify_attempts:
+            return {"ok": True, "attempts_left": MAX_VERIFY_ATTEMPTS - call["verify_attempts"]}
+        if call["verify_attempts"] >= MAX_VERIFY_ATTEMPTS:
             log_audit(conn, "agent", "verify_identity", "attempts exhausted", "refused", call_id)
             conn.commit()
             return {"ok": False, "attempts_left": 0}
@@ -121,7 +111,7 @@ def verify_identity(call_id, answer, conn=None):
             "update calls set verify_attempts = verify_attempts + 1, verified = ? where call_id = ?",
             (1 if good else 0, call_id),
         )
-        left = max_verify_attempts - (call["verify_attempts"] + 1)
+        left = MAX_VERIFY_ATTEMPTS - (call["verify_attempts"] + 1)
         log_audit(conn, "agent", "verify_identity", f"ok={good}", "ok" if good else "refused", call_id)
         conn.commit()
         return {"ok": good, "attempts_left": max(left, 0)}
@@ -160,9 +150,9 @@ def get_failed_payment(call_id, conn=None):
             conn.close()
 
 
-def mint_token(conn, length=token_length):
+def mint_token(conn, length=TOKEN_LENGTH):
     for _ in range(20):
-        token = "".join(secrets.choice(token_alphabet) for _ in range(length))
+        token = "".join(secrets.choice(TOKEN_ALPHABET) for _ in range(length))
         exists = conn.execute("select 1 from payment_links where token = ?", (token,)).fetchone()
         if not exists:
             return token
@@ -170,20 +160,18 @@ def mint_token(conn, length=token_length):
 
 
 def create_payment_link(customer_id, kind="pay_now", channel="console", base_url=None,
-                        ttl_minutes=default_ttl_minutes, call_id=None, conn=None):
+                        ttl_minutes=DEFAULT_TTL_MINUTES, call_id=None, conn=None):
     """Mint a single-use expiring link. base_url falls back to $BASE_URL
     (the cloudflared origin); empty means a relative /pay path for local use."""
-    import os
-    from datetime import datetime, timedelta, timezone
-    if kind not in valid_link_kinds:
+    if kind not in VALID_LINK_KINDS:
         raise ValueError(f"unknown link kind {kind!r}")
-    if channel not in valid_link_channels:
+    if channel not in VALID_LINK_CHANNELS:
         raise ValueError(f"unknown channel {channel!r}")
     try:
         ttl_minutes = int(ttl_minutes)
     except (TypeError, ValueError):
         raise ValueError(f"bad ttl {ttl_minutes!r}")
-    base_url = base_url if base_url else os.environ.get("BASE_URL", "")
+    base_url = base_url if base_url else server_base_url()
     own = conn is None
     conn = conn or get_conn()
     try:
@@ -210,8 +198,7 @@ def send_payment_link(call_id, channel="console", base_url=None, conn=None):
     """Voice path: verified calls only, mandate failures get an update-mandate link.
     Renders + mock-sends through the channel adapter so the customer gets
     something, and stamps last_message_at for ranking recency."""
-    from app import channels as channel_adapters
-    if channel not in valid_link_channels:
+    if channel not in VALID_LINK_CHANNELS:
         raise ValueError(f"unknown channel {channel!r}")
     own = conn is None
     conn = conn or get_conn()
@@ -224,11 +211,11 @@ def send_payment_link(call_id, channel="console", base_url=None, conn=None):
                                 (call["customer_id"],)).fetchone()
         kind = "update_mandate" if kind_row["failure_reason"] == "mandate_expired" else "pay_now"
         link = create_payment_link(
-            call["customer_id"], kind, channel, base_url, default_ttl_minutes, call_id, conn)
+            call["customer_id"], kind, channel, base_url, DEFAULT_TTL_MINUTES, call_id, conn)
         person = conn.execute("select name, phone, amount_due from customers where customer_id = ?",
                               (call["customer_id"],)).fetchone()
-        text = channel_adapters.render(channel, person["name"], person["amount_due"], link["url"])
-        receipt = channel_adapters.send(channel, mask_phone(person["phone"]), text)
+        text = channels.render(channel, person["name"], person["amount_due"], link["url"])
+        receipt = channels.send(channel, mask_phone(person["phone"]), text)
         conn.execute("update customers set last_message_at = ? where customer_id = ?",
                      (utcnow(), call["customer_id"]))
         log_audit(conn, "agent", "send_payment_link",
@@ -242,7 +229,6 @@ def send_payment_link(call_id, channel="console", base_url=None, conn=None):
 
 def get_link_context(token, conn=None):
     """Page + result endpoints share this: link + customer or a dismissal status."""
-    from datetime import datetime, timezone
     own = conn is None
     conn = conn or get_conn()
     try:
@@ -270,7 +256,6 @@ def get_link_context(token, conn=None):
 
 
 def schedule_retry(call_id, when, conn=None):
-    from datetime import datetime
     try:
         moment = datetime.fromisoformat(str(when))
     except (TypeError, ValueError):
@@ -311,7 +296,7 @@ def request_human_handoff(call_id, reason, notes="", conn=None):
 
 
 def log_outcome(call_id, outcome, notes="", conn=None):
-    if outcome not in valid_call_outcomes:
+    if outcome not in VALID_CALL_OUTCOMES:
         raise ValueError(f"unknown outcome {outcome!r}")
     own = conn is None
     conn = conn or get_conn()

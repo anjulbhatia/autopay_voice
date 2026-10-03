@@ -1,4 +1,3 @@
-"""SQLite storage: schema + idempotent seed. Path from DATABASE_URL, else data/autopay_voice.db."""
 import hashlib
 import hmac
 import json
@@ -180,12 +179,6 @@ def count_calls_today(conn: sqlite3.Connection, customer_id: str) -> int:
         (customer_id,),
     ).fetchone()
     return int(row["n"])
-
-
-def mask_phone(phone: str | None) -> str:
-    if not phone or len(phone) < 4:
-        return "****"
-    return f"****-**{phone[-4:]}"
 
 
 if __name__ == "__main__":

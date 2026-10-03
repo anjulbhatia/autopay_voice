@@ -276,12 +276,9 @@ def active_call_partial():
         <p class='text-sm font-bold text-neutral-900'>
             Call #{cid} · {esc(r['name'])}
         </p>
-        <span class='rounded-full px-2 py-0.5 text-[11px] font-semibold {tier_pill.get(r['tier'] or '', 'bg-neutral-100 text-neutral-600')}'
-            title='{esc(tier_tip.get(r['tier'] or '', ''))}'>{esc((r['tier'] or '?').capitalize())}
-        </span>
     </div>
-    <p class='mt-1 font-mono text-xs text-neutral-500'>
-        {esc(r['customer_id'])} · {esc(mask_phone(r['phone']))} · ₹{r['amount_due']:,.2f} · P {r['p_pay']}
+    <p class='mt-1 font-mono text-sm text-neutral-500'>
+        {esc(r['customer_id'])} · {esc(mask_phone(r['phone']))} | Due: ₹{r['amount_due']:,.2f}
     </p>
     <p class='mt-1 text-[11px] text-neutral-500'>
         Verified {verified_dot(r['verified'])}

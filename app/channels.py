@@ -1,13 +1,15 @@
-"""Channel adapters. Console prints; whatsapp/sms are message templates with
-a mock send (real delivery needs business accounts, templates, consent).
+"""Channel adapters. whatsapp/sms/inapp/razorpay_notify are message templates
+with a mock send (real delivery needs business accounts, templates, consent).
 `to_label` must already be masked — raw numbers never reach logs here.
-Dashboard redressal navigation on the link comes in the next update.
 """
 
 templates = {
     "whatsapp": ("Hi {name}, your autopay of {amount} failed. "
                  "Pay securely (link dies in {ttl} min): {url}."),
     "sms": ("Autopay {amount} failed. Pay: {url} (expires in {ttl} min)."),
+    "inapp": ("Pay your autopay dues securely: {url} (expires in {ttl} min)."),
+    "razorpay_notify": ("Autopay alert for {name}: {amount} failed. "
+                        "Pay: {url} (expires in {ttl} min)."),
     "console": ("pay link for {name} ({amount}, {ttl} min): {url}"),
 }
 

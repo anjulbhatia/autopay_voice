@@ -1,19 +1,8 @@
-"""Vapi wrapper. Web-call mode is the default; real phone calls need an
-explicit developer-controlled number plus confirm=True. Needs VAPI_API_KEY.
-
-Vapi's API shape changes — confirm payloads against their current docs
-before relying on fields beyond the assistant system prompt + server tools.
-"""
 import os
 
 import httpx
 
 api_base = "https://api.vapi.ai"
-
-# Vapi phone number — your taken Vapi number (display/caller id side). Set VAPI_PHONE_NUMBER in env.
-vapi_phone_number = os.environ.get("VAPI_PHONE_NUMBER", "").strip()
-# Optional Vapi phoneNumberId (UUID from dashboard). Preferred for outbound dial when set.
-vapi_phone_number_id = os.environ.get("VAPI_PHONE_NUMBER_ID", "").strip()
 
 tool_names = ["verify_identity", "get_failed_payment", "send_payment_link",
               "schedule_retry", "request_human_handoff", "log_outcome"]
@@ -28,6 +17,16 @@ def api_key():
     if not key or key == "YOUR_VAPI_API_KEY":
         raise vapi_error("set a real VAPI_API_KEY (see .env.example)")
     return key
+
+
+def vapi_caller_number():
+    """Your taken Vapi number (caller-id side). Set VAPI_PHONE_NUMBER in env."""
+    return os.environ.get("VAPI_PHONE_NUMBER", "").strip()
+
+
+def vapi_phone_id():
+    """Vapi phoneNumberId UUID from the dashboard. Preferred for outbound dial."""
+    return os.environ.get("VAPI_PHONE_NUMBER_ID", "").strip()
 
 
 def build_assistant(system_prompt, base_url, model="gpt-4o-mini"):
@@ -76,8 +75,8 @@ def start_phone_call(system_prompt, base_url, to_number=None, key=None, confirm=
     payload = {"type": "outboundPhoneCall",
                "customer": {"number": dest},
                "assistant": build_assistant(system_prompt, base_url)}
-    phone_id = os.environ.get("VAPI_PHONE_NUMBER_ID", "").strip() or vapi_phone_number_id
-    caller = from_number or vapi_phone_number or os.environ.get("VAPI_PHONE_NUMBER", "").strip()
+    phone_id = vapi_phone_id()
+    caller = from_number or vapi_caller_number()
     if phone_id:
         payload["phoneNumberId"] = phone_id
     elif caller:
@@ -86,3 +85,24 @@ def start_phone_call(system_prompt, base_url, to_number=None, key=None, confirm=
                           json=payload, timeout=30)
     response.raise_for_status()
     return response.json()
+
+
+def parse_tool_call(body):
+    """Tolerant tool-call parser. Canonical shape: message.toolCalls[0]
+    {name/function.name, arguments}. Confirm against current Vapi docs."""
+    message = body.get("message", body) if isinstance(body, dict) else {}
+    for key in ("toolCalls", "tool_calls"):
+        found = message.get(key)
+        if found:
+            return found[0]
+    for key in ("toolCall", "functionCall", "function_call"):
+        single = message.get(key)
+        if single:
+            return single
+    return {}
+
+
+def call_id_of(body):
+    """Provider call id -> our internal call row (bound server-side)."""
+    message = body.get("message", {}) if isinstance(body.get("message"), dict) else {}
+    return (body.get("call", {}) or {}).get("id") or body.get("callId") or (message.get("call", {}) or {}).get("id")

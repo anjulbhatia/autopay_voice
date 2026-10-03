@@ -1,4 +1,4 @@
-"""autopay launcher (stdlib only). Installed as the `autopay` command.
+"""autopay launcher. Installed as the `autopay` command.
 
 usage:
   uv run autopay              serve backend + pay page + merchant console (seeds db first if missing)
@@ -17,13 +17,8 @@ backend_cmd = [sys.executable, "-m", "uvicorn", "app.api:app",
 
 
 def ensure_db():
-    from app.db import get_conn, init_db, seed_from_json
-    conn = get_conn()
-    try:
-        init_db(conn)
-        seed_from_json(root / "data" / "customers.json", conn)
-    finally:
-        conn.close()
+    from app.tools import ingest_customers_data
+    ingest_customers_data()
 
 
 def serve():

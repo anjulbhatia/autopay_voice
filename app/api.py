@@ -8,9 +8,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from app.db import get_conn, mask_phone, utcnow
+from app.db import get_conn, utcnow
 from app import agent as agent_rules
-from app import channels, dash, tools
+from app import channels, dash, provider, tools
+from app.config import MAX_LINK_TTL, MIN_LINK_TTL, VALID_LINK_CHANNELS, VALID_LINK_KINDS, base_url
+from app.utils import mask_phone
 
 web_dir = Path(__file__).resolve().parent.parent / "web"
 
@@ -81,34 +83,13 @@ async def pay_result(body: pay_result_in):
     return {"ok": True, "outcome": body.outcome, "payment_status": status}
 
 
-def extract_tool_call(body):
-    """Tolerant tool-call parser. Canonical shape: message.toolCalls[0]
-    {name/function.name, arguments}. Confirm against current Vapi docs."""
-    message = body.get("message", body) if isinstance(body, dict) else {}
-    for key in ("toolCalls", "tool_calls"):
-        found = message.get(key)
-        if found:
-            return found[0]
-    for key in ("toolCall", "functionCall", "function_call"):
-        single = message.get(key)
-        if single:
-            return single
-    return {}
-
-
-def provider_call_id(body):
-    message = body.get("message", {}) if isinstance(body.get("message"), dict) else {}
-    return (body.get("call", {}) or {}).get("id") or body.get("callId") or (message.get("call", {}) or {}).get("id")
-
-
 @app.post("/vapi/tool")
 async def vapi_tool(request: Request):
     """In-call tool dispatch. Binds provider call id -> internal call;
     the model never supplies a customer id. Always 200 with result/error
     so the voice loop keeps talking instead of dropping."""
-    import os
     body = await request.json()
-    raw = extract_tool_call(body)
+    raw = provider.parse_tool_call(body)
     name = raw.get("name") or (raw.get("function", {}) or {}).get("name", "")
     args = raw.get("arguments") or raw.get("args") or raw.get("parameters") or {}
     if isinstance(args, str):
@@ -118,20 +99,19 @@ async def vapi_tool(request: Request):
             args = {}
     conn = get_conn()
     try:
-        vapi_id = provider_call_id(body)
+        vapi_id = provider.call_id_of(body)
         row = conn.execute("select call_id from calls where vapi_call_id = ?", (vapi_id,)).fetchone() \
             if vapi_id else None
         if row is None:
             return {"error": "unknown call; only the generic message may be spoken"}
         call_id = row["call_id"]
-        base_url = os.environ.get("BASE_URL", "")
         try:
             if name == "verify_identity":
                 return {"result": tools.verify_identity(call_id, args.get("answer"), conn)}
             if name == "get_failed_payment":
                 return {"result": tools.get_failed_payment(call_id, conn)}
             if name == "send_payment_link":
-                return {"result": tools.send_payment_link(call_id, args.get("channel", "console"), base_url, conn)}
+                return {"result": tools.send_payment_link(call_id, args.get("channel", "console"), base_url(), conn)}
             if name == "schedule_retry":
                 return {"result": tools.schedule_retry(call_id, args.get("when"), conn)}
             if name == "request_human_handoff":
@@ -156,7 +136,7 @@ async def vapi_events(request: Request):
         return {"ok": True, "ignored": True}
     conn = get_conn()
     try:
-        vapi_id = provider_call_id(body)
+        vapi_id = provider.call_id_of(body)
         row = conn.execute("select call_id, outcome from calls where vapi_call_id = ?",
                            (vapi_id,)).fetchone() if vapi_id else None
         if row is None:
@@ -229,10 +209,8 @@ async def console_page(request: Request):
     queue_count = len(queue["eligible"])
     eligible_ids = {c["customer_id"] for c in queue["eligible"]}
     customers.sort(key=lambda c: (c["customer_id"] not in eligible_ids, c["customer_id"]))
-    import os as _env
-    base_default = _env.environ.get("BASE_URL", "")
-    from app import provider as _provider
-    dest_hint = mask_phone(_provider.test_destination("")) if _provider.test_destination("") else ""
+    base_default = base_url()
+    dest_hint = mask_phone(provider.test_destination("")) if provider.test_destination("") else ""
     return templates.TemplateResponse(
         request=request, name="console.html",
         context={"customers": customers, "funnel": funnel,
@@ -258,8 +236,7 @@ async def partial_active_call():
 async def partial_start(request: Request):
     """Single Start Call button. mode=web opens the internal call row;
     mode=phone additionally dials via Vapi (confirm required)."""
-    import os
-    from app import agent as agent_pkg, provider
+    from app import agent as agent_pkg
     body = await _payload(request)
     mode = (body.get("mode") or "web").strip().lower()
     if mode not in ("web", "phone"):
@@ -280,8 +257,7 @@ async def partial_start(request: Request):
                 prompt = agent_pkg.assemble_prompt(row, started["tier"], False, started["reasons"])
             finally:
                 conn.close()
-            base_url = os.environ.get("BASE_URL", "")
-            placed = provider.start_phone_call(prompt, base_url,
+            placed = provider.start_phone_call(prompt, base_url(),
                                                body.get("to_number", ""),
                                                confirm=True)
             vapi_id = placed.get("id", "")
@@ -294,7 +270,7 @@ async def partial_start(request: Request):
                 conn.close()
             dest = provider.test_destination(body.get("to_number", ""))
             return dash.message(f"call {started['call_id']} dialing {mask_phone(dest)}"
-                                + (f" via {provider.vapi_phone_number}" if provider.vapi_phone_number else ""))
+                                + (f" via {provider.vapi_caller_number()}" if provider.vapi_caller_number() else ""))
         except Exception as exc:  # provider errors stay in-app, row stays open
             return dash.message(f"call {started['call_id']} open but dial failed: {exc}", good=False)
     return dash.message(f"call {started['call_id']} open ({started['tier']}, p={started['p_pay']})")
@@ -431,7 +407,6 @@ async def partial_handoff_detail(handoff_id: int):
 
 @app.post("/partials/links", response_class=HTMLResponse)
 async def partial_link(request: Request):
-    import os
     body = await _payload(request)
     customer_id = (body.get("customer_id") or "").strip()
     channel = body.get("channel", "console")
@@ -444,11 +419,11 @@ async def partial_link(request: Request):
         ttl = int(body.get("ttl", 10))
     except (TypeError, ValueError):
         return dash.message("bad ttl (1-1440 required)", good=False)
-    if channel not in tools.valid_link_channels:
+    if channel not in VALID_LINK_CHANNELS:
         return dash.message(f"unknown channel {channel!r}", good=False)
-    if body.get("kind", "pay_now") not in tools.valid_link_kinds:
+    if body.get("kind", "pay_now") not in VALID_LINK_KINDS:
         return dash.message(f"unknown kind {body.get('kind')!r}", good=False)
-    if not 1 <= ttl <= 1440:
+    if not MIN_LINK_TTL <= ttl <= MAX_LINK_TTL:
         return dash.message("bad ttl (1-1440 required)", good=False)
     conn = get_conn()
     try:
@@ -466,7 +441,7 @@ async def partial_link(request: Request):
                              and '"' not in raw_base and "<" not in raw_base):
             return dash.message("bad base_url (https:// origin required)", good=False)
         link = tools.create_payment_link(customer_id, body.get("kind", "pay_now"), channel,
-                                         raw_base or os.environ.get("BASE_URL", "") or None, ttl,
+                                         raw_base or base_url() or None, ttl,
                                          call_id=call_id)
     except ValueError as exc:
         return dash.message(str(exc), good=False)

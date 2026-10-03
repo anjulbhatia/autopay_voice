@@ -1,16 +1,10 @@
-"""Prompt assembly + call decisions. Pure functions over agent/*.md.
-
-Verification stays mandatory before disclosure (enforced in tools.py).
-'Suspicious' here means: exhausted tries, possible third party, or anomaly —
-those get the generic message and an early human, never details.
-"""
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from app.config import CALL_CLOSE_HOUR, CALL_OPEN_HOUR
+
 agent_dir = Path(__file__).resolve().parent.parent / "agent"
 
-call_open_hour = 9
-call_close_hour = 21  # IST wall clock; seed numbers are +91
 ist = timezone(timedelta(hours=5, minutes=30))
 
 tier_budget = {"short": 90, "standard": 180, "extended": 300}
@@ -88,7 +82,7 @@ def calling_allowed(now=None):
     """Hard calling-hours gate: 09:00–21:00 IST. Pure (pass now in tests)."""
     moment = now or datetime.now(timezone.utc)
     local = moment.astimezone(ist)
-    return call_open_hour <= local.hour < call_close_hour
+    return CALL_OPEN_HOUR <= local.hour < CALL_CLOSE_HOUR
 
 
 def generic_message():

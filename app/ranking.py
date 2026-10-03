@@ -1,14 +1,7 @@
-"""Transparent heuristic ranking per AGENT.md section 5.
-
-Lower propensity gets more patience, never more pressure (tier only
-controls call length and empathy). Every score carries human reasons.
-"""
 import math
 from datetime import datetime, timedelta, timezone
 
-daily_cap = 2
-total_cap = 5
-cooldown_hours = 24
+from app.config import COOLDOWN_HOURS, DAILY_CAP, TOTAL_CAP
 
 failure_boost = {
     "insufficient_balance": 0.9,   # money problem, often retries fine
@@ -42,16 +35,16 @@ def score_customer(row, calls_today, now=None):
     if int(row["do_not_call"] or 0):
         return {"customer_id": row["customer_id"], "eligible": False,
                 "reason": "do-not-call flag set", "reasons": ["suppressed: do-not-call"]}
-    if attempts >= total_cap:
+    if attempts >= TOTAL_CAP:
         return {"customer_id": row["customer_id"], "eligible": False,
-                "reason": f"total cap reached ({attempts}/{total_cap})",
-                "reasons": [f"suppressed: {attempts} total attempts (cap {total_cap})"]}
-    if calls_today >= daily_cap:
+                "reason": f"total cap reached ({attempts}/{TOTAL_CAP})",
+                "reasons": [f"suppressed: {attempts} total attempts (cap {TOTAL_CAP})"]}
+    if calls_today >= DAILY_CAP:
         return {"customer_id": row["customer_id"], "eligible": False,
-                "reason": f"daily cap reached ({calls_today}/{daily_cap})",
-                "reasons": [f"suppressed: {calls_today} calls today (cap {daily_cap})"]}
+                "reason": f"daily cap reached ({calls_today}/{DAILY_CAP})",
+                "reasons": [f"suppressed: {calls_today} calls today (cap {DAILY_CAP})"]}
     last_call = parse_utc(row["last_call_at"])
-    if last_call and now - last_call < timedelta(hours=cooldown_hours):
+    if last_call and now - last_call < timedelta(hours=COOLDOWN_HOURS):
         return {"customer_id": row["customer_id"], "eligible": False,
                 "reason": "called within last 24h",
                 "reasons": ["suppressed: last call <24h ago"]}
@@ -67,7 +60,7 @@ def score_customer(row, calls_today, now=None):
         logit -= 0.15 * attempts
         reasons.append(f"{attempts} prior attempts (-{0.15 * attempts:.1f})")
     last_msg = parse_utc(row["last_message_at"])
-    if last_msg and now - last_msg < timedelta(hours=cooldown_hours):
+    if last_msg and now - last_msg < timedelta(hours=COOLDOWN_HOURS):
         logit -= 0.6
         reasons.append("very recent message, likely already engaged (-0.6)")
 
