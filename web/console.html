@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="https://use.hugeicons.com/font/icons.css" />
     <script src="https://cdn.jsdelivr.net/npm/animejs/dist/bundles/anime.umd.min.js"></script>
   </head>
-  <body class="flex h-screen flex-col overflow-hidden bg-neutral-50 text-neutral-800 antialiased text-[13px]">
+  <body class="flex h-screen flex-col overflow-scroll bg-neutral-50 text-neutral-800 antialiased text-[13px]">
     <!-- ============ SESSION GATEWAY (first paint of every session) ============ -->
     <div id="gateway" class="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-900 p-4">
       <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
@@ -42,7 +42,7 @@
       <div class="mx-auto flex h-11 w-full items-center justify-between px-3">
         <span class="flex items-center gap-2">
           <img src="/assets/pay_icon.png" width="20" height="20" alt="AutoPay icon" />
-          <h3 class="font-bold text-[15px] tracking-tight text-neutral-900">Console</h3>
+          <h3 class="font-bold text-[15px] tracking-tight text-neutral-900">Merchant Console</h3>
           <span class="hidden sm:inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-700">
             <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>Live
           </span>
@@ -73,15 +73,15 @@
       <aside class="max-sm:fixed max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:z-40 max-sm:border-t max-sm:border-neutral-200 max-sm:bg-white/95 max-sm:backdrop-blur max-sm:px-3 max-sm:py-2 max-sm:[padding-bottom:env(safe-area-inset-bottom)] sm:w-36 sm:shrink-0 sm:overflow-y-auto">
         <nav class="flex max-sm:justify-around sm:flex-col gap-1 sm:rounded-xl sm:border sm:border-neutral-200 sm:bg-white sm:p-1.5 sm:sticky sm:top-0" aria-label="Console sections">
           <button data-nav="calls" class="flex flex-col sm:flex-row items-center gap-0.5 sm:gap-2 sm:whitespace-nowrap rounded-lg px-3 py-1.5 sm:py-2 text-[10px] sm:text-[13px] text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2Z"/></svg>
+            <i class="hgi hgi-stroke hgi-rounded hgi-call-02 text-lg"></i>
             Calls
           </button>
           <button data-nav="customers" class="flex flex-col sm:flex-row items-center gap-0.5 sm:gap-2 sm:whitespace-nowrap rounded-lg px-3 py-1.5 sm:py-2 text-[10px] sm:text-[13px] text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>
+            <i class="hgi hgi-stroke hgi-rounded hgi-users"></i>
             Customers
           </button>
           <button data-nav="observability" class="flex flex-col sm:flex-row items-center gap-0.5 sm:gap-2 sm:whitespace-nowrap rounded-lg px-3 py-1.5 sm:py-2 text-[10px] sm:text-[13px] text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            <i class="hgi hgi-stroke hgi-rounded hgi-chart-relationship text-lg"></i>
             Observe
             {% if open_handoffs %}<span class="max-sm:absolute max-sm:-mt-6 max-sm:ml-8 sm:ml-auto rounded-full bg-red-500 px-1.5 py-px text-[10px] font-bold text-white">{{ open_handoffs }}</span>{% endif %}
           </button>
@@ -90,7 +90,7 @@
 
       <main class="flex-1 min-w-0 min-h-0 overflow-y-auto sm:overflow-visible">
         <!-- ============ CALLS ============ -->
-        <section data-section="calls" class="flex flex-col gap-2 min-h-0">
+        <section data-section="calls" class="flex flex-col gap-2 min-h-0 mb-12">
           <div class="shrink-0 grid grid-cols-3 sm:grid-cols-6 gap-2">
             <div class="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-2.5 py-2"><p class="text-[11px] font-semibold text-neutral-500">Queue</p><p class="text-base font-bold tabular-nums text-neutral-900">{{ queue_count }}</p></div>
             <div class="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-2.5 py-2"><p class="text-[11px] font-semibold text-neutral-500">Failed</p><p class="text-base font-bold tabular-nums text-neutral-900">{{ failed_count }}</p></div>
@@ -100,7 +100,18 @@
             <div class="flex items-center justify-between rounded-lg border border-primary-foreground/30 bg-primary px-2.5 py-2"><p class="text-[11px] font-semibold text-primary-foreground/70">Recovery</p><p class="text-base font-bold tabular-nums text-primary-foreground">{{ recovery_rate }}%</p></div>
           </div>
 
-          <div class="shrink-0 rounded-xl border border-neutral-200 bg-white p-2.5">
+          <div class="min-h-0 grid gap-2 sm:grid-cols-5">
+            <div class="order-2 sm:order-2 sm:col-span-2 rounded-xl border-2 border-primary bg-white p-3 max-h-120">
+              <div class="flex items-center justify-between gap-2">
+                <h2 class="text-[13px] font-bold tracking-tight text-neutral-900">On Call Now <span class="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-green-500 align-middle"></span></h2>
+                <button onclick="refreshActive()" class="rounded-full border border-neutral-200 px-2 py-0.5 text-[11px] text-neutral-500 hover:text-neutral-900">Refresh</button>
+              </div>
+              <div id="active-call" hx-get="/partials/active-call" hx-trigger="load, every 10s, refresh" class="mt-1"></div>
+            </div>
+
+            <div class="order-2 sm:order-2 sm:col-span-3">
+
+          <div class="shrink-0 rounded-xl border border-neutral-200 bg-white p-2.5 w-full mb-2">
             <form id="dial-form" hx-post="/partials/queue/start" hx-target="#console-msg" hx-swap="innerHTML" class="flex flex-wrap items-center gap-1.5">
               <select id="dial-cid" name="customer_id" title="Customer to call"
                       class="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs max-w-48">
@@ -146,21 +157,16 @@
               </span>
             </div>
           </div>
-
-          <div class="min-h-0 grid gap-2 sm:grid-cols-5">
-            <div class="order-1 sm:order-2 sm:col-span-2 rounded-xl border border-primary-foreground bg-white p-3">
-              <div class="flex items-center justify-between gap-2">
-                <h2 class="text-[13px] font-bold tracking-tight text-neutral-900">On Call Now <span class="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-green-500 align-middle"></span></h2>
-                <button onclick="refreshActive()" class="rounded-full border border-neutral-200 px-2 py-0.5 text-[11px] text-neutral-500 hover:text-neutral-900">Refresh</button>
-              </div>
-              <div id="active-call" hx-get="/partials/active-call" hx-trigger="load, every 10s, refresh" class="mt-1"></div>
-            </div>
-            <div class="order-2 sm:order-1 sm:col-span-3 rounded-xl border border-neutral-200 bg-white p-3">
+              
+            <div class="order-2 sm:order-2 sm:col-span-3 rounded-xl border border-neutral-200 bg-white p-3 max-h-100">
               <div class="flex items-center justify-between gap-2">
                 <h2 class="text-[13px] font-bold tracking-tight text-neutral-900">Queue <span class="font-mono text-[11px] font-medium text-neutral-400">Tick to add to the dial queue</span></h2>
               </div>
-              <div id="queue-table" hx-get="/partials/queue" hx-trigger="load, refresh" class="mt-1 min-h-[200px] overflow-auto"></div>
+              <div id="queue-table" hx-get="/partials/queue" hx-trigger="load, refresh" class="mt-1 min-h-[200px] overflow-y-visible"></div>
             </div>
+
+            </div>
+
           </div>
         </section>
 

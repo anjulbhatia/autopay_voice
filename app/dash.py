@@ -1,8 +1,9 @@
-import html
 import json as jsonlib
 
-from app import channels, tools
-from app.db import get_conn, mask_phone
+from app import tools
+from app.config import base_url as server_base_url
+from app.db import get_conn
+from app.utils import esc, mask_phone, parse_reasons
 
 tier_pill = {
     "short": "bg-green-100 text-green-800",
@@ -52,22 +53,13 @@ display_outcome = {"open": "Open", "link_sent": "Link Sent", "retry_scheduled": 
                    "refused": "Refused", "opted_out": "Opted Out", "failed": "Failed"}
 
 
-def esc(value):
-    return html.escape("" if value is None else str(value), quote=True)
-
-
 def icon(name):
-    paths = {
-        "phone": '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2Z"/>',
-        "stop": '<rect x="6" y="6" width="12" height="12" rx="2"/>',
-        "join": '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
-        "eye": '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
-        "link": '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
-        "check": '<path d="M20 6 9 17l-5-5"/>',
+    icons = {
+        "phone": '<i class="hgi hgi-stroke hgi-rounded hgi-call-02 text-lg"></i>',
+        "stop": '<i class="hgi hgi-stroke hgi-rounded hgi-call-disabled-02 text-lg"></i>',
+        "join": '<i class="hgi hgi-stroke hgi-rounded hgi-customer-support text-lg"></i>',
     }
-    return (f"<svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' "
-            f"stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>"
-            f"{paths.get(name, '')}</svg>")
+    return (f"{icons.get(name, '')}")
 
 
 def th(label, tip=""):
@@ -89,10 +81,6 @@ def score_bar(prob):
 def empty_row(text):
     return (f"<tr><td class='py-8 text-center text-sm text-neutral-400'>"
             f"<span class='mx-auto mb-1 block h-8 w-8 rounded-full bg-neutral-100'></span>{esc(text)}</td></tr>")
-
-
-def _match(hay, needle):
-    return not needle or needle.lower() in (hay or "").lower()
 
 
 def queue_partial(mode="expected_value", q="", tier="all"):
@@ -279,56 +267,124 @@ def active_call_partial():
         r = dict(row)
         cid = r["call_id"]
         vals = jsonlib.dumps({"call_id": cid})
-        reasons = ""
-        if r.get("score_reasons"):
-            try:
-                reasons = "; ".join(jsonlib.loads(r["score_reasons"]))
-            except ValueError:
-                reasons = ""
-        base_default = esc(os.environ.get("BASE_URL", ""))
+        reasons = "; ".join(parse_reasons(r.get("score_reasons")))
+        base_default = esc(server_base_url())
         return (
-            f"<div class='rounded-xl bg-neutral-50 p-3'>"
-            f"<div class='flex items-center justify-between gap-2'>"
-            f"<p class='text-sm font-bold text-neutral-900'>Call #{cid} · {esc(r['name'])}</p>"
-            f"<span class='rounded-full px-2 py-0.5 text-[11px] font-semibold {tier_pill.get(r['tier'] or '', 'bg-neutral-100 text-neutral-600')}'"
-            f" title='{esc(tier_tip.get(r['tier'] or '', ''))}'>{esc((r['tier'] or '?').capitalize())}</span></div>"
-            f"<p class='mt-1 font-mono text-xs text-neutral-500'>{esc(r['customer_id'])} · {esc(mask_phone(r['phone']))} · ₹{r['amount_due']:,.2f} · P {r['p_pay']}</p>"
-            f"<p class='mt-1 text-[11px] text-neutral-500'>Verified {verified_dot(r['verified'])}</p>"
-            f"{('<p class=' + chr(39) + 'mt-1 text-[11px] text-neutral-400' + chr(39) + f'>{esc(reasons)}</p>') if reasons else ''}"
-            f"</div>"
-            f"<div class='mt-2 grid grid-cols-3 gap-1.5'>"
-            f"<button hx-post='/partials/calls/stop-active' hx-target='#console-msg' hx-swap='innerHTML' class='{btn_danger} inline-flex items-center justify-center gap-1' title='Stop the live call'>{icon('stop')}Stop</button>"
-            f"<button hx-post='/partials/calls/join' hx-vals='{vals}' hx-target='#console-msg' hx-swap='innerHTML' class='{btn_ghost} inline-flex items-center justify-center gap-1' title='Join and open a handoff'>{icon('join')}Join</button>"
-            f"<button hx-get='/partials/calls/{cid}' hx-target='#modal-body' hx-swap='innerHTML' onclick='openModal()' class='{btn_ghost} inline-flex items-center justify-center gap-1' title='Inspect call'>{icon('eye')}Inspect</button>"
-            f"</div>"
-            f"<form hx-post='/partials/calls/outcome' hx-target='#console-msg' hx-swap='innerHTML' class='mt-2 flex gap-1.5'>"
-            f"<input type='hidden' name='call_id' value='{cid}' />"
-            f"<select name='outcome' class='{inp}' title='Log a terminal outcome'>"
-            f"<option value='link_sent'>Link Sent</option><option value='retry_scheduled'>Retry Scheduled</option>"
-            f"<option value='no_answer'>No Answer</option><option value='wrong_person'>Wrong Person</option>"
-            f"<option value='refused'>Refused</option><option value='opted_out'>Opted Out</option>"
-            f"<option value='failed'>Failed</option></select>"
-            f"<button class='{btn_primary} shrink-0'>Log</button></form>"
-            f"<div class='mt-2 rounded-xl border border-neutral-100 p-2'>"
-            f"<p class='{lbl}'>Payment Link</p>"
-            f"<form hx-post='/partials/links' hx-target='#link-result' hx-swap='innerHTML' class='mt-1 flex gap-1.5'>"
-            f"<input type='hidden' name='customer_id' value='{esc(r['customer_id'])}' />"
-            f"<input type='hidden' name='call_id' value='{cid}' />"
-            f"<select name='kind' class='{inp}' title='Link type'><option value='pay_now'>Pay Now</option><option value='update_mandate'>Update Mandate</option></select>"
-            f"<select name='channel' class='{inp}' title='Send channel'><option value='console'>Console</option><option value='whatsapp'>WhatsApp</option><option value='sms'>SMS</option></select>"
-            f"<input name='ttl' type='hidden' value='10' /><input name='base_url' type='hidden' value='{base_default}' />"
-            f"<button class='{btn_primary} shrink-0 inline-flex items-center gap-1' title='Send payment link'>{icon('link')}Send</button></form>"
-            f"<div id='link-result' class='mt-1'></div></div>"
-            f"<div class='mt-2 rounded-xl border border-neutral-100 p-2'>"
-            f"<p class='{lbl}'>Handoff</p>"
-            f"<form hx-post='/partials/handoffs/create' hx-target='#console-msg' hx-swap='innerHTML' class='mt-1 grid gap-1.5'>"
-            f"<input type='hidden' name='call_id' value='{cid}' />"
-            f"<select name='reason' class='{inp}' title='Handoff reason'>"
-            f"<option value='asked_for_human'>Asked For Human</option><option value='dispute'>Dispute</option>"
-            f"<option value='hardship'>Hardship</option><option value='human_joined'>Human Joined</option>"
-            f"<option value='other'>Other</option></select>"
-            f"<input name='notes' placeholder='Notes for the human…' class='{inp}' />"
-            f"<button class='{btn_ghost} w-full'>Open Handoff</button></form></div>")
+            f"""
+<div class='rounded-xl bg-neutral-50 p-3'>
+    <div class='flex items-center justify-between gap-2'>
+        <p class='text-sm font-bold text-neutral-900'>
+            Call #{cid} · {esc(r['name'])}
+        </p>
+        <span class='rounded-full px-2 py-0.5 text-[11px] font-semibold {tier_pill.get(r['tier'] or '', 'bg-neutral-100 text-neutral-600')}'
+            title='{esc(tier_tip.get(r['tier'] or '', ''))}'>{esc((r['tier'] or '?').capitalize())}
+        </span>
+    </div>
+    <p class='mt-1 font-mono text-xs text-neutral-500'>
+        {esc(r['customer_id'])} · {esc(mask_phone(r['phone']))} · ₹{r['amount_due']:,.2f} · P {r['p_pay']}
+    </p>
+    <p class='mt-1 text-[11px] text-neutral-500'>
+        Verified {verified_dot(r['verified'])}
+    </p>
+</div>
+
+<div class='mt-2 grid grid-cols-3 gap-1.5'>
+    <button hx-post='/partials/calls/stop-active' hx-target='#console-msg' hx-swap='innerHTML' class='{btn_danger} inline-flex items-center justify-center gap-1' title='Stop the live call'>{icon('stop')}
+        Stop
+    </button>
+    <button hx-post='/partials/calls/join' hx-vals='{vals}' hx-target='#console-msg' hx-swap='innerHTML' class='{btn_ghost} inline-flex items-center justify-center gap-1' title='Join and open a handoff'>
+        {icon('join')} Join
+    </button>
+    <button hx-get='/partials/calls/{cid}' hx-target='#modal-body' hx-swap='innerHTML' onclick='openModal()' class='{btn_ghost} inline-flex items-center justify-center gap-1' title='Inspect call'>
+        {icon('eye')} Inspect
+    </button>
+</div>
+
+<form hx-post='/partials/calls/outcome' hx-target='#console-msg' hx-swap='innerHTML' class='mt-2 flex gap-1.5'>
+    <input type='hidden' name='call_id' value='{cid}' />
+    <select name='outcome' class='{inp}' title='Log a terminal outcome'>
+        <option value='link_sent'>Link Sent</option><option value='retry_scheduled'>
+            Retry Scheduled
+        </option>
+        <option value='no_answer'>No Answer</option><option value='wrong_person'>
+            Wrong Person
+        </option>
+        <option value='refused'>Refused</option><option value='opted_out'>
+            Opted Out
+        </option>
+        <option value='failed'>
+            Failed
+        </option>
+    </select>
+    <button class='{btn_primary} shrink-0'>
+        Log
+    </button>
+</form>
+
+<div class='mt-2 rounded-xl border border-neutral-100 p-2'>
+    <p class='{lbl}'>
+        Payment Link
+    </p>
+    <form hx-post='/partials/links' hx-target='#link-result' hx-swap='innerHTML' class='mt-1 flex gap-1.5'>
+        <input type='hidden' name='customer_id' value='{esc(r['customer_id'])}' />
+        <input type='hidden' name='call_id' value='{cid}' />
+        <select name='kind' class='{inp}' title='Link type'>
+            <option value='pay_now'>
+                Pay Now
+            </option>
+            <option value='update_mandate'>
+                Update Mandate
+            </option>
+        </select>
+        <select name='channel' class='{inp}' title='Send channel'>
+            <option value='console'>
+                Console
+            </option>
+            <option value='whatsapp'>
+                WhatsApp
+            </option>
+            <option value='sms'>
+                SMS
+            </option>
+        </select>
+        <input name='ttl' type='hidden' value='10' /><input name='base_url' type='hidden' value='{base_default}' />
+        <button class='{btn_primary} shrink-0 inline-flex items-center gap-1' title='Send payment link'>
+            Send
+        </button>
+    </form>
+    <div id='link-result' class='mt-1'>
+    </div>
+</div>
+<div class='mt-2 rounded-xl border border-neutral-100 p-2'>
+    <p class='{lbl}'>
+        Handoff
+    </p>
+    <form hx-post='/partials/handoffs/create' hx-target='#console-msg' hx-swap='innerHTML' class='mt-1 grid gap-1.5'>
+        <input type='hidden' name='call_id' value='{cid}' />
+        <select name='reason' class='{inp}' title='Handoff reason'>
+            <option value='asked_for_human'>
+                Asked For Human
+            </option>
+            <option value='dispute'>
+                Dispute
+            </option>
+            <option value='hardship'>
+                Hardship
+            </option>
+            <option value='human_joined'>
+                Human Joined
+            </option>
+            <option value='other'>
+                Other
+            </option>
+        </select>
+        <input name='notes' placeholder='Notes for the human…' class='{inp}' />
+        <button class='{btn_ghost} w-full'>
+            Open Handoff
+        </button>
+    </form>
+</div>
+        """)
     finally:
         conn.close()
 
@@ -508,5 +564,5 @@ def handoff_detail_partial(handoff_id):
 def message(text, good=True):
     color = ("border-green-500 bg-green-50 text-green-800" if good
              else "border-red-500 bg-red-50 text-red-700")
-    return (f"<p class='rounded-xl border-l-4 {color} bg-opacity-60 px-3 py-2 text-sm font-medium'>"
+    return (f"<p class='rounded-xl {color} bg-opacity-60 px-3 py-2 text-sm font-medium'>"
             f"{esc(text)}</p>")
