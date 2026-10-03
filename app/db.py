@@ -18,6 +18,7 @@ except ImportError:  # stdlib-only fallback: env must be exported manually
     load_dotenv = None
 if load_dotenv is not None:
     load_dotenv(repo_root / ".env", override=False)
+    load_dotenv(repo_root / ".env.local", override=True)
 
 schema_sql = """
 PRAGMA foreign_keys = ON;

@@ -39,17 +39,51 @@ btn_danger = ("rounded-full border border-red-200 bg-white px-3 py-1 text-xs fon
 inp = "rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs w-full"
 lbl = "text-[10px] font-semibold uppercase tracking-wider text-neutral-400"
 
+tier_tip = {
+    "short": "Likely to pay — short call under 90 seconds, get to the point",
+    "standard": "Needs explanation — 2 to 3 minutes, offer two options",
+    "extended": "Needs patience — 3 to 5 minutes, offer a human early",
+}
+
+display_status = {"failed": "Failed", "link_sent": "Link Sent", "recovered": "Recovered",
+                  "handoff": "Handoff", "opted_out": "Opted Out"}
+display_outcome = {"open": "Open", "link_sent": "Link Sent", "retry_scheduled": "Retry Scheduled",
+                   "handoff": "Handoff", "no_answer": "No Answer", "wrong_person": "Wrong Person",
+                   "refused": "Refused", "opted_out": "Opted Out", "failed": "Failed"}
+
 
 def esc(value):
     return html.escape("" if value is None else str(value), quote=True)
 
 
+def icon(name):
+    paths = {
+        "phone": '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2Z"/>',
+        "stop": '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+        "join": '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+        "eye": '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+        "link": '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+        "check": '<path d="M20 6 9 17l-5-5"/>',
+    }
+    return (f"<svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' "
+            f"stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>"
+            f"{paths.get(name, '')}</svg>")
+
+
+def th(label, tip=""):
+    tip_attr = f" title='{esc(tip)}'" if tip else ""
+    return f"<th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]'{tip_attr}>{esc(label)}</th>"
+
+
+def table_shell(headers, body):
+    return (f"<table class='w-full text-left text-sm'><thead class='sticky top-0 bg-white'>"
+            f"<tr class='text-neutral-500'>{headers}</tr></thead><tbody>{body}</tbody></table>")
+
+
 def score_bar(prob):
     pct = max(4, min(100, int(float(prob) * 100)))
-    return (f"<span class='inline-flex items-center gap-1.5'>"
-            f"<span class='inline-block h-1.5 w-14 overflow-hidden rounded-full bg-neutral-100'>"
-            f"<span class='block h-1.5 rounded-full bg-primary-foreground' style='width:{pct}%'></span></span>"
-            f"<span class='font-mono text-xs'>{prob}</span></span>")
+    return (f"<span class='inline-block h-1.5 w-16 overflow-hidden rounded-full bg-neutral-100' role='img'>"
+            f"<span class='block h-1.5 rounded-full bg-primary-foreground' style='width:{pct}%'></span></span>")
 
 
 def empty_row(text):
@@ -68,28 +102,27 @@ def queue_partial(mode="expected_value", q="", tier="all"):
             if (tier in ("all", "", None) or c["tier"] == tier)
             and (not q or q in c["customer_id"].lower() or q in (c.get("name") or "").lower())]
     body = "".join(
-        f"<tr class='border-t border-neutral-100 transition-colors hover:bg-[#faf8fd]' data-cid='{esc(c['customer_id'])}'>"
+        f"<tr class='border-t border-neutral-100 transition-colors hover:bg-[#faf8fd]' data-cid='{esc(c['customer_id'])}'"
+        f" title='Pay probability {c['p_pay']} — {esc('; '.join(c.get('reasons', [])))}'>"
         f"<td class='py-2 pl-1 pr-1'><input type='checkbox' class='qpick h-3.5 w-3.5 accent-primary-foreground' "
-        f"data-cid='{esc(c['customer_id'])}' aria-label='add {esc(c['customer_id'])} to dial queue' /></td>"
+        f"data-cid='{esc(c['customer_id'])}' aria-label='Add {esc(c['customer_id'])} to dial queue' /></td>"
         f"<td class='py-2 pr-2 font-mono text-[12px] font-medium'>{esc(c['customer_id'])}</td>"
         f"<td class='py-2 pr-2 font-medium text-[13px]'>{esc(c.get('name', ''))}</td>"
         f"<td class='py-2 pr-2'>{score_bar(c['p_pay'])}</td>"
         f"<td class='py-2 pr-2'><span class='rounded-full px-2 py-0.5 text-[11px] font-semibold "
-        f"{tier_pill.get(c['tier'], 'bg-neutral-100 text-neutral-600')}'>{esc(c['tier'])}</span></td>"
+        f"{tier_pill.get(c['tier'], 'bg-neutral-100 text-neutral-600')}'"
+        f" title='{esc(tier_tip.get(c['tier'], ''))}'>{esc(c['tier'].capitalize())}</span></td>"
         f"<td class='py-2 pr-2 font-mono tabular-nums text-[13px]'>₹{c['priority']:,.0f}</td>"
         f"<td class='py-2 pr-2 font-mono text-xs text-neutral-500'>{esc(c.get('phone_masked', ''))}</td>"
-        f"<td class='py-2 text-right'><button hx-post='/partials/queue/start'"
-        f" hx-vals='{jsonlib.dumps({'customer_id': c['customer_id']})}'"
-        f" hx-target='#console-msg' hx-swap='innerHTML'"
-        f" class='{btn_primary}'>Start call</button></td></tr>"
         for c in rows
-    ) or empty_row("queue empty — everyone is capped, cooling down, or opted out")
-    return (f"<table class='w-full text-left text-sm'><thead class='sticky top-0 bg-white'><tr class='text-[10px] uppercase tracking-wider text-neutral-400'>"
-            f"<th class='pb-1.5 pl-1 pr-1 font-semibold w-6'><input type='checkbox' id='q-all' class='h-3.5 w-3.5 accent-primary-foreground' title='select all' /></th>"
-            f"<th class='pb-1.5 pr-2 font-semibold'>ID</th><th class='pb-1.5 pr-2 font-semibold'>Name</th>"
-            f"<th class='pb-1.5 pr-2 font-semibold'>P(pay)</th><th class='pb-1.5 pr-2 font-semibold'>Tier</th>"
-            f"<th class='pb-1.5 pr-2 font-semibold'>Exp. value</th><th class='pb-1.5 pr-2 font-semibold'>Phone</th>"
-            f"<th class='pb-1.5'></th></tr></thead><tbody>{body}</tbody></table>")
+    ) or empty_row("Queue empty — everyone is capped, cooling down, or opted out")
+    head = (f"<th class='pb-1.5 pl-1 pr-1 w-6'><input type='checkbox' id='q-all' class='h-3.5 w-3.5 accent-primary-foreground' title='Select all' /></th>"
+            f"{th('ID', 'Customer ID')}{th('Name', 'Customer name')}"
+            f"{th('Pay Likelihood', 'Estimated probability this customer pays on contact — hover a row for reasons')}"
+            f"{th('Call Tier', 'Short: likely, under 90s · Standard: needs explanation, 2–3 min · Extended: needs patience, human early')}"
+            f"{th('Expected Value', 'Pay likelihood × amount due — recovery value of trying first')}"
+            f"{th('Phone', 'Masked registered number')}")
+    return table_shell(head, body)
 
 
 def customers_partial(status="all", q=""):
@@ -112,14 +145,13 @@ def customers_partial(status="all", q=""):
             f"<td class='py-2 pr-2 font-mono tabular-nums text-[13px]'>₹{r['amount_due']:,.2f}</td>"
             f"<td class='py-2 pr-2 text-center font-mono text-xs'>{r['attempts_total']}</td>"
             f"<td class='py-2'><span class='rounded-full px-2 py-0.5 text-[11px] font-semibold "
-            f"{status_pill.get(r['payment_status'], 'bg-neutral-100 text-neutral-600')}'>{esc(r['payment_status'])}</span></td></tr>"
+            f"{status_pill.get(r['payment_status'], 'bg-neutral-100 text-neutral-600')}'>{esc(display_status.get(r['payment_status'], r['payment_status']))}</span></td></tr>"
             for r in rows
-        ) or empty_row("no customers in this state")
-        return (f"<table class='w-full text-left text-sm'><thead class='sticky top-0 bg-white'><tr class='text-[10px] uppercase tracking-wider text-neutral-400'>"
-                f"<th class='pb-1.5 pr-2 font-semibold'>ID</th><th class='pb-1.5 pr-2 font-semibold'>Name</th>"
-                f"<th class='pb-1.5 pr-2 font-semibold'>Phone</th><th class='pb-1.5 pr-2 font-semibold'>Due</th>"
-                f"<th class='pb-1.5 pr-2 font-semibold'>Tries</th>"
-                f"<th class='pb-1.5 font-semibold'>Status</th></tr></thead><tbody>{body}</tbody></table>")
+        ) or empty_row("No customers in this state")
+        head = (f"{th('ID', 'Customer ID')}{th('Name', 'Customer name')}{th('Phone', 'Masked registered number')}"
+                f"{th('Due', 'Amount due in rupees')}{th('Tries', 'Total call attempts so far')}"
+                f"{th('Status', 'Payment status — click a row for calls, links, and handoffs')}")
+        return table_shell(head, body)
     finally:
         conn.close()
 
@@ -152,26 +184,26 @@ def customer_detail_partial(customer_id):
             f"<li class='py-1 text-xs text-neutral-600'>#{r['handoff_id']} {esc(r['reason'])} · {esc(r['status'])}</li>"
             for r in hands) or "<li class='text-xs text-neutral-400'>no handoffs</li>"
         return (
-            f"<p class='text-base font-bold text-neutral-900'>{esc(c['name'])} "
+            f"<p class='text-lg font-bold text-neutral-900'>{esc(c['name'])} "
             f"<span class='font-mono text-xs font-medium text-neutral-400'>{esc(c['customer_id'])}</span></p>"
             f"<p class='mt-0.5 font-mono text-xs text-neutral-500'>{esc(mask_phone(c['phone']))} · ₹{c['amount_due']:,.2f} due {esc(c['due_date'] or '')}</p>"
             f"<div class='mt-2 flex flex-wrap gap-1.5'>"
-            f"<span class='rounded-full px-2 py-0.5 text-[11px] font-semibold {status_pill.get(c['payment_status'], 'bg-neutral-100 text-neutral-600')}'>{esc(c['payment_status'])}</span>"
+            f"<span class='rounded-full px-2 py-0.5 text-[11px] font-semibold {status_pill.get(c['payment_status'], 'bg-neutral-100 text-neutral-600')}'>{esc(display_status.get(c['payment_status'], c['payment_status']))}</span>"
             f"<span class='rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-600'>{esc(c['failure_reason'] or '')}</span>"
-            f"<span class='rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-600'>tries {c['attempts_total']} · defaults {c['default_history']}</span>"
+            f"<span class='rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-600'>Tries {c['attempts_total']} · Defaults {c['default_history']}</span>"
             f"</div>"
             f"<div class='mt-3 grid grid-cols-2 gap-2 text-left'>"
-            f"<div class='rounded-lg bg-neutral-50 p-2'><p class='{lbl}'>Security Q</p><p class='mt-0.5 text-xs'>{esc(c['security_question'] or '—')}</p></div>"
-            f"<div class='rounded-lg bg-neutral-50 p-2'><p class='{lbl}'>Past notes</p><p class='mt-0.5 text-xs'>{esc(c['past_call_notes'] or '—')}</p></div>"
+            f"<div class='rounded-xl bg-neutral-50 p-3'><p class='{lbl}'>Security Question</p><p class='mt-0.5 text-xs'>{esc(c['security_question'] or '—')}</p></div>"
+            f"<div class='rounded-xl bg-neutral-50 p-3'><p class='{lbl}'>Past Notes</p><p class='mt-0.5 text-xs'>{esc(c['past_call_notes'] or '—')}</p></div>"
             f"</div>"
-            f"<div class='mt-2 grid gap-2'>"
-            f"<div><p class='{lbl}'>Calls</p><ul class='mt-0.5 divide-y divide-neutral-100'>{calls_html}</ul></div>"
-            f"<div><p class='{lbl}'>Links</p><ul class='mt-0.5'>{links_html}</ul></div>"
-            f"<div><p class='{lbl}'>Handoffs</p><ul class='mt-0.5'>{hands_html}</ul></div>"
+            f"<div class='mt-3 grid gap-3'>"
+            f"<div><p class='{lbl}'>Call History</p><ul class='mt-1 divide-y divide-neutral-100'>{calls_html}</ul></div>"
+            f"<div><p class='{lbl}'>Payment Links</p><ul class='mt-1'>{links_html}</ul></div>"
+            f"<div><p class='{lbl}'>Handoffs</p><ul class='mt-1'>{hands_html}</ul></div>"
             f"</div>"
-            f"<div class='mt-3 flex gap-2'>"
+            f"<div class='mt-4 flex gap-2'>"
             f"<button hx-post='/partials/queue/start' hx-vals='{jsonlib.dumps({'customer_id': c['customer_id']})}' "
-            f"hx-target='#console-msg' hx-swap='innerHTML' onclick='closeModal()' class='{btn_primary}'>Start call</button>"
+            f"hx-target='#console-msg' hx-swap='innerHTML' onclick='closeModal()' class='{btn_primary} inline-flex items-center gap-1'>{icon('phone')}Start Call</button>"
             f"<button onclick='closeModal()' class='{btn_ghost}'>Close</button></div>")
     finally:
         conn.close()
@@ -179,15 +211,17 @@ def customer_detail_partial(customer_id):
 
 def action_buttons(call_id):
     vals = jsonlib.dumps({"call_id": call_id})
-    return (f"<button hx-get='/partials/calls/{call_id}'"
+    return (f"<span class='inline-flex items-center gap-1'>"
+            f"<button hx-get='/partials/calls/{call_id}'"
             f" hx-target='#modal-body' hx-swap='innerHTML' onclick='openModal()'"
-            f" class='{btn_ghost}'>View</button> "
+            f" class='{btn_ghost} inline-flex items-center gap-1' title='Inspect call'>{icon('eye')}Inspect</button> "
             f"<button hx-post='/partials/calls/cut' hx-vals='{vals}'"
             f" hx-target='#console-msg' hx-swap='innerHTML'"
-            f" class='{btn_danger}'>Cut</button> "
+            f" class='{btn_danger} inline-flex items-center gap-1' title='Stop this call'>{icon('stop')}Stop</button> "
             f"<button hx-post='/partials/calls/join' hx-vals='{vals}'"
             f" hx-target='#console-msg' hx-swap='innerHTML'"
-            f" class='{btn_ghost}'>Join</button>")
+            f" class='{btn_ghost} inline-flex items-center gap-1' title='Join and open a handoff'>{icon('join')}Join</button>"
+            f"</span>")
 
 
 def verified_dot(verified):
@@ -212,24 +246,26 @@ def calls_partial(q="", outcome="all"):
             f"<td class='py-2 pr-2 font-mono text-[12px] font-medium'>#{r['call_id']}</td>"
             f"<td class='py-2 pr-2 font-mono text-xs'>{esc(r['customer_id'])}</td>"
             f"<td class='py-2 pr-2'><span class='rounded-full px-2 py-0.5 text-[11px] font-semibold "
-            f"{tier_pill.get(r['tier'] or '', 'bg-neutral-100 text-neutral-600')}'>{esc(r['tier'] or '?')}</span></td>"
+            f"{tier_pill.get(r['tier'] or '', 'bg-neutral-100 text-neutral-600')}'"
+            f" title='{esc(tier_tip.get(r['tier'] or '', ''))}'>{esc((r['tier'] or '?').capitalize())}</span></td>"
             f"<td class='py-2 pr-2 text-xs'>{verified_dot(r['verified'])}</td>"
             f"<td class='py-2 pr-2'><span class='rounded-full px-2 py-0.5 text-[11px] font-semibold "
-            f"{outcome_pill.get(r['outcome'] or 'open', 'bg-neutral-100 text-neutral-600')}'>{esc(r['outcome'] or 'open')}</span></td>"
+            f"{outcome_pill.get(r['outcome'] or 'open', 'bg-neutral-100 text-neutral-600')}'>{esc(display_outcome.get(r['outcome'] or 'open', r['outcome'] or 'open'))}</span></td>"
             f"<td class='py-2 text-right whitespace-nowrap' onclick='event.stopPropagation()'>{action_buttons(r['call_id'])}</td></tr>"
             for r in rows
-        ) or empty_row("no calls yet — start one from the queue")
-        return (f"<table class='w-full text-left text-sm'><thead class='sticky top-0 bg-white'><tr class='text-[10px] uppercase tracking-wider text-neutral-400'>"
-                f"<th class='pb-1.5 pr-2 font-semibold'>Call</th><th class='pb-1.5 pr-2 font-semibold'>Customer</th>"
-                f"<th class='pb-1.5 pr-2 font-semibold'>Tier</th><th class='pb-1.5 pr-2 font-semibold'>Verified</th>"
-                f"<th class='pb-1.5 pr-2 font-semibold'>Outcome</th><th class='pb-1.5'></th></tr></thead>"
-                f"<tbody>{body}</tbody></table>")
+        ) or empty_row("No calls yet — start one from the queue")
+        head = (f"{th('Call', 'Internal call id')}{th('Customer', 'Customer ID')}"
+                f"{th('Tier', 'Short: likely, under 90s · Standard: needs explanation · Extended: needs patience, human early')}"
+                f"{th('Verified', 'Identity verified on this call')}"
+                f"{th('Outcome', 'Terminal outcome — click a row for transcript and audit')}<th class='pb-1.5'></th>")
+        return table_shell(head, body)
     finally:
         conn.close()
 
 
 def active_call_partial():
-    """Singular on-call card: latest open call + link + handoff forms bound to it."""
+    """Live call card: compact, no inner scroll. Actions + link + handoff in one view."""
+    import os
     conn = get_conn()
     try:
         row = conn.execute(
@@ -237,9 +273,9 @@ def active_call_partial():
             " join customers on customers.customer_id = calls.customer_id"
             " where calls.outcome is null order by call_id desc limit 1").fetchone()
         if row is None:
-            return ("<div class='py-6 text-center text-sm text-neutral-400'>"
-                    "<span class='mx-auto mb-2 block h-9 w-9 rounded-full bg-neutral-100'></span>"
-                    "no live call — pick queue + Start call</div>")
+            return ("<div class='py-8 text-center'>"
+                    "<p class='text-sm font-semibold text-neutral-700'>No Live Call</p>"
+                    "<p class='mt-1 text-xs text-neutral-400'>Pick a customer above and press Start Call.</p></div>")
         r = dict(row)
         cid = r["call_id"]
         vals = jsonlib.dumps({"call_id": cid})
@@ -249,46 +285,50 @@ def active_call_partial():
                 reasons = "; ".join(jsonlib.loads(r["score_reasons"]))
             except ValueError:
                 reasons = ""
+        base_default = esc(os.environ.get("BASE_URL", ""))
         return (
+            f"<div class='rounded-xl bg-neutral-50 p-3'>"
             f"<div class='flex items-center justify-between gap-2'>"
-            f"<p class='text-sm font-bold text-neutral-900'>#{cid} · {esc(r['name'])} "
-            f"<span class='font-mono text-xs font-medium text-neutral-400'>{esc(r['customer_id'])}</span></p>"
-            f"<span class='rounded-full px-2 py-0.5 text-[11px] font-semibold {tier_pill.get(r['tier'] or '', 'bg-neutral-100 text-neutral-600')}'>{esc(r['tier'] or '?')}</span></div>"
-            f"<p class='mt-0.5 font-mono text-xs text-neutral-500'>{esc(mask_phone(r['phone']))} · ₹{r['amount_due']:,.2f} · p={r['p_pay']}</p>"
-            f"<p class='mt-1 text-[11px] text-neutral-500'>verified {verified_dot(r['verified'])} · {esc(reasons)}</p>"
-            f"<div class='mt-2 flex flex-wrap gap-1.5'>"
-            f"<button hx-post='/partials/calls/cut' hx-vals='{vals}' hx-target='#console-msg' hx-swap='innerHTML' class='{btn_danger}'>Cut</button>"
-            f"<button hx-post='/partials/calls/join' hx-vals='{vals}' hx-target='#console-msg' hx-swap='innerHTML' class='{btn_ghost}'>Join → handoff</button>"
-            f"<button hx-get='/partials/calls/{cid}' hx-target='#modal-body' hx-swap='innerHTML' onclick='openModal()' class='{btn_ghost}'>Inspect</button>"
+            f"<p class='text-sm font-bold text-neutral-900'>Call #{cid} · {esc(r['name'])}</p>"
+            f"<span class='rounded-full px-2 py-0.5 text-[11px] font-semibold {tier_pill.get(r['tier'] or '', 'bg-neutral-100 text-neutral-600')}'"
+            f" title='{esc(tier_tip.get(r['tier'] or '', ''))}'>{esc((r['tier'] or '?').capitalize())}</span></div>"
+            f"<p class='mt-1 font-mono text-xs text-neutral-500'>{esc(r['customer_id'])} · {esc(mask_phone(r['phone']))} · ₹{r['amount_due']:,.2f} · P {r['p_pay']}</p>"
+            f"<p class='mt-1 text-[11px] text-neutral-500'>Verified {verified_dot(r['verified'])}</p>"
+            f"{('<p class=' + chr(39) + 'mt-1 text-[11px] text-neutral-400' + chr(39) + f'>{esc(reasons)}</p>') if reasons else ''}"
+            f"</div>"
+            f"<div class='mt-2 grid grid-cols-3 gap-1.5'>"
+            f"<button hx-post='/partials/calls/stop-active' hx-target='#console-msg' hx-swap='innerHTML' class='{btn_danger} inline-flex items-center justify-center gap-1' title='Stop the live call'>{icon('stop')}Stop</button>"
+            f"<button hx-post='/partials/calls/join' hx-vals='{vals}' hx-target='#console-msg' hx-swap='innerHTML' class='{btn_ghost} inline-flex items-center justify-center gap-1' title='Join and open a handoff'>{icon('join')}Join</button>"
+            f"<button hx-get='/partials/calls/{cid}' hx-target='#modal-body' hx-swap='innerHTML' onclick='openModal()' class='{btn_ghost} inline-flex items-center justify-center gap-1' title='Inspect call'>{icon('eye')}Inspect</button>"
             f"</div>"
             f"<form hx-post='/partials/calls/outcome' hx-target='#console-msg' hx-swap='innerHTML' class='mt-2 flex gap-1.5'>"
             f"<input type='hidden' name='call_id' value='{cid}' />"
-            f"<select name='outcome' class='{inp}'>"
-            f"<option value='link_sent'>link_sent</option><option value='retry_scheduled'>retry</option>"
-            f"<option value='no_answer'>no_answer</option><option value='wrong_person'>wrong_person</option>"
-            f"<option value='refused'>refused</option><option value='opted_out'>opted_out</option>"
-            f"<option value='failed'>failed</option></select>"
+            f"<select name='outcome' class='{inp}' title='Log a terminal outcome'>"
+            f"<option value='link_sent'>Link Sent</option><option value='retry_scheduled'>Retry Scheduled</option>"
+            f"<option value='no_answer'>No Answer</option><option value='wrong_person'>Wrong Person</option>"
+            f"<option value='refused'>Refused</option><option value='opted_out'>Opted Out</option>"
+            f"<option value='failed'>Failed</option></select>"
             f"<button class='{btn_primary} shrink-0'>Log</button></form>"
-            f"<div class='mt-2 rounded-lg bg-neutral-50 p-2'>"
-            f"<p class='{lbl}'>Link · {esc(r['customer_id'])}</p>"
+            f"<div class='mt-2 rounded-xl border border-neutral-100 p-2'>"
+            f"<p class='{lbl}'>Payment Link</p>"
             f"<form hx-post='/partials/links' hx-target='#link-result' hx-swap='innerHTML' class='mt-1 flex gap-1.5'>"
             f"<input type='hidden' name='customer_id' value='{esc(r['customer_id'])}' />"
             f"<input type='hidden' name='call_id' value='{cid}' />"
-            f"<select name='kind' class='{inp}'><option>pay_now</option><option>update_mandate</option></select>"
-            f"<select name='channel' class='{inp}'><option>console</option><option>whatsapp</option><option>sms</option></select>"
-            f"<input name='ttl' type='hidden' value='10' /><input name='base_url' type='hidden' value='' />"
-            f"<button class='{btn_primary} shrink-0'>Send</button></form>"
+            f"<select name='kind' class='{inp}' title='Link type'><option value='pay_now'>Pay Now</option><option value='update_mandate'>Update Mandate</option></select>"
+            f"<select name='channel' class='{inp}' title='Send channel'><option value='console'>Console</option><option value='whatsapp'>WhatsApp</option><option value='sms'>SMS</option></select>"
+            f"<input name='ttl' type='hidden' value='10' /><input name='base_url' type='hidden' value='{base_default}' />"
+            f"<button class='{btn_primary} shrink-0 inline-flex items-center gap-1' title='Send payment link'>{icon('link')}Send</button></form>"
             f"<div id='link-result' class='mt-1'></div></div>"
-            f"<div class='mt-2 rounded-lg bg-neutral-50 p-2'>"
-            f"<p class='{lbl}'>Handoff · call #{cid}</p>"
+            f"<div class='mt-2 rounded-xl border border-neutral-100 p-2'>"
+            f"<p class='{lbl}'>Handoff</p>"
             f"<form hx-post='/partials/handoffs/create' hx-target='#console-msg' hx-swap='innerHTML' class='mt-1 grid gap-1.5'>"
             f"<input type='hidden' name='call_id' value='{cid}' />"
-            f"<select name='reason' class='{inp}'>"
-            f"<option value='asked_for_human'>asked_for_human</option><option value='dispute'>dispute</option>"
-            f"<option value='hardship'>hardship</option><option value='human_joined'>human_joined</option>"
-            f"<option value='other'>other</option></select>"
-            f"<input name='notes' placeholder='notes for human…' class='{inp}' />"
-            f"<button class='{btn_ghost} w-full'>Open handoff</button></form></div>")
+            f"<select name='reason' class='{inp}' title='Handoff reason'>"
+            f"<option value='asked_for_human'>Asked For Human</option><option value='dispute'>Dispute</option>"
+            f"<option value='hardship'>Hardship</option><option value='human_joined'>Human Joined</option>"
+            f"<option value='other'>Other</option></select>"
+            f"<input name='notes' placeholder='Notes for the human…' class='{inp}' />"
+            f"<button class='{btn_ghost} w-full'>Open Handoff</button></form></div>")
     finally:
         conn.close()
 
@@ -309,21 +349,17 @@ def handoffs_partial(only_open=True, q=""):
             f"<td class='py-2 pr-2 font-mono text-xs'>{esc(r['customer_id'])}</td>"
             f"<td class='py-2 pr-2 text-[13px]'>{esc(r['reason'])}</td>"
             f"<td class='py-2 pr-2'><span class='rounded-full px-2 py-0.5 text-[11px] font-semibold "
-            f"{'bg-amber-100 text-amber-800' if r['status'] == 'open' else 'bg-neutral-200 text-neutral-500'}'>{esc(r['status'])}</span></td>"
+            f"{'bg-amber-100 text-amber-800' if r['status'] == 'open' else 'bg-neutral-200 text-neutral-500'}'>{esc(display_status.get(r['status'], r['status'].capitalize()))}</span></td>"
             f"<td class='py-2 text-right whitespace-nowrap' onclick='event.stopPropagation()'>"
-            f"<button hx-get='/partials/handoffs/{r['handoff_id']}'"
-            f" hx-target='#modal-body' hx-swap='innerHTML' onclick='openModal()'"
-            f" class='{btn_ghost}'>View</button> "
             f"<button hx-post='/partials/handoffs/resolve'"
             f" hx-vals='{jsonlib.dumps({'handoff_id': r['handoff_id']})}'"
             f" hx-target='#console-msg' hx-swap='innerHTML'"
-            f" class='{btn_ghost}'>Resolve</button></td></tr>"
+            f" class='{btn_ghost} inline-flex items-center gap-1' title='Resolve handoff'>{icon('check')}Resolve</button></td></tr>"
             for r in rows
-        ) or empty_row("no handoffs — quiet floor")
-        return (f"<table class='w-full text-left text-sm'><thead class='sticky top-0 bg-white'><tr class='text-[10px] uppercase tracking-wider text-neutral-400'>"
-                f"<th class='pb-1.5 pr-2 font-semibold'>ID</th><th class='pb-1.5 pr-2 font-semibold'>Customer</th>"
-                f"<th class='pb-1.5 pr-2 font-semibold'>Reason</th><th class='pb-1.5 pr-2 font-semibold'>Status</th>"
-                f"<th class='pb-1.5'></th></tr></thead><tbody>{body}</tbody></table>")
+        ) or empty_row("No handoffs — quiet floor")
+        head = (f"{th('ID', 'Handoff ID')}{th('Customer', 'Customer ID')}"
+                f"{th('Reason', 'Why a human is needed')}{th('Status', 'Open or resolved')}<th class='pb-1.5'></th>")
+        return table_shell(head, body)
     finally:
         conn.close()
 
@@ -417,15 +453,15 @@ def call_detail_partial(call_id):
             for a in audit) or "<li class='text-xs text-neutral-400'>no audit for this call</li>"
         transcript_html = (f"<p class='mt-1 rounded-lg bg-neutral-50 p-3 text-xs whitespace-pre-wrap'>{esc(transcript)}</p>"
                            if transcript else "<p class='mt-1 text-xs text-neutral-400'>no transcript yet</p>")
-        return (f"<p class='text-base font-bold text-neutral-900'>Call #{call['call_id']} · {esc(call.get('name') or '')}</p>"
+        return (f"<p class='text-lg font-bold text-neutral-900'>Call #{call['call_id']} · {esc(call.get('name') or '')}</p>"
                 f"<p class='mt-0.5 font-mono text-xs text-neutral-500'>{esc(call['customer_id'])} · {words} words</p>"
-                f"<div class='mt-2 grid grid-cols-3 gap-1.5 text-center'>"
-                f"<div class='rounded-lg bg-neutral-50 p-2'><p class='text-[10px] text-neutral-400'>tier</p>"
-                f"<p class='text-sm font-bold'>{esc(call['tier'] or '?')}</p></div>"
-                f"<div class='rounded-lg bg-neutral-50 p-2'><p class='text-[10px] text-neutral-400'>verified</p>"
-                f"<p class='text-sm font-bold'>{'yes' if call['verified'] else 'no'}</p></div>"
-                f"<div class='rounded-lg bg-neutral-50 p-2'><p class='text-[10px] text-neutral-400'>outcome</p>"
-                f"<p class='text-sm font-bold'>{esc(call['outcome'] or 'open')}</p></div></div>"
+                f"<div class='mt-3 grid grid-cols-3 gap-2 text-center'>"
+                f"<div class='rounded-xl bg-neutral-50 p-3'><p class='text-[10px] text-neutral-400'>Tier</p>"
+                f"<p class='text-sm font-bold'>{esc((call['tier'] or '?').capitalize())}</p></div>"
+                f"<div class='rounded-xl bg-neutral-50 p-3'><p class='text-[10px] text-neutral-400'>Verified</p>"
+                f"<p class='text-sm font-bold'>{'Yes' if call['verified'] else 'No'}</p></div>"
+                f"<div class='rounded-xl bg-neutral-50 p-3'><p class='text-[10px] text-neutral-400'>Outcome</p>"
+                f"<p class='text-sm font-bold'>{esc(display_outcome.get(call['outcome'] or 'open', call['outcome'] or 'Open'))}</p></div></div>"
                 f"<p class='mt-1.5 text-[11px] text-neutral-500'>{esc(reasons)}</p>"
                 f"<h4 class='mt-3 text-[10px] font-semibold uppercase tracking-wider text-neutral-400'>Transcript</h4>"
                 f"{transcript_html}{judge}"

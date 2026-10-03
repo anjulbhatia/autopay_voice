@@ -1,8 +1,9 @@
-/* console.js — nav, dial queue, active-call refresh, modal for console.html */
+/* console.js — session gateway, nav, dial queue, call controls, toasts, modal */
 (function () {
   "use strict";
 
   var QUEUE_KEY = "autopay_dial_queue";
+  var SESSION_KEY = "autopay_session";
   var dialQueue = [];
   try { dialQueue = JSON.parse(window.localStorage.getItem(QUEUE_KEY) || "[]"); } catch (e) { dialQueue = []; }
   if (!Array.isArray(dialQueue)) dialQueue = [];
@@ -10,6 +11,32 @@
   function hasAnime() {
     return typeof window.anime !== "undefined";
   }
+
+  /* ---------- session gateway ---------- */
+
+  function sessionActive() {
+    try { return window.sessionStorage.getItem(SESSION_KEY) === "active"; }
+    catch (e) { return true; }
+  }
+
+  function enterConsole() {
+    var name = document.getElementById("gateway-name");
+    try {
+      window.sessionStorage.setItem(SESSION_KEY, "active");
+      if (name && name.value.trim()) window.sessionStorage.setItem("autopay_operator", name.value.trim());
+    } catch (e) {}
+    var gate = document.getElementById("gateway");
+    if (gate) gate.classList.add("hidden");
+  }
+
+  function endSession() {
+    try { window.sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
+    closeMenu();
+    var gate = document.getElementById("gateway");
+    if (gate) gate.classList.remove("hidden");
+  }
+
+  /* ---------- dial queue ---------- */
 
   function saveQueue() {
     try { window.localStorage.setItem(QUEUE_KEY, JSON.stringify(dialQueue)); } catch (e) {}
@@ -23,7 +50,7 @@
     if (next) next.disabled = dialQueue.length === 0;
     if (chip) {
       chip.classList.toggle("hidden", dialQueue.length === 0);
-      chip.textContent = dialQueue.length ? "up next: " + dialQueue[0] + (dialQueue.length > 1 ? " +" + (dialQueue.length - 1) : "") : "";
+      chip.textContent = dialQueue.length ? "Up next: " + dialQueue[0] + (dialQueue.length > 1 ? " +" + (dialQueue.length - 1) : "") : "";
     }
     document.querySelectorAll(".qpick").forEach(function (box) {
       box.checked = dialQueue.indexOf(box.getAttribute("data-cid")) !== -1;
@@ -50,6 +77,35 @@
     saveQueue(); syncQueueUI();
   }
 
+  /* ---------- toast notifications ---------- */
+
+  function toast(html) {
+    var stack = document.getElementById("console-msg");
+    if (!stack) return;
+    var card = document.createElement("div");
+    card.className = "pointer-events-auto";
+    card.innerHTML = html;
+    stack.appendChild(card);
+    while (stack.children.length > 3) stack.removeChild(stack.firstChild);
+    if (hasAnime()) window.anime.animate(card, { translateY: [12, 0], opacity: [0, 1], duration: 220, easing: "easeOutCubic" });
+    setTimeout(function () {
+      if (!card.parentNode) return;
+      if (hasAnime()) {
+        window.anime.animate(card, {
+          opacity: [1, 0], duration: 250,
+          onComplete: function () { if (card.parentNode) card.parentNode.removeChild(card); },
+        });
+      } else if (card.parentNode) card.parentNode.removeChild(card);
+    }, 6000);
+    updateTabTitle();
+  }
+
+  function updateTabTitle() {
+    var chip = document.getElementById("dial-chip");
+    var pending = chip && !chip.classList.contains("hidden") ? chip.textContent : "";
+    document.title = pending ? "(" + dialQueue.length + ") Merchant Console - Autopay" : "Merchant Console - Autopay";
+  }
+
   function postJSON(url, payload) {
     return fetch(url, {
       method: "POST",
@@ -58,12 +114,19 @@
     }).then(function (r) { return r.text(); });
   }
 
+  function dialOptions() {
+    var mode = document.getElementById("dial-mode");
+    var to = document.getElementById("dial-to");
+    var confirm = document.getElementById("dial-confirm");
+    return {
+      mode: mode ? mode.value : "web",
+      to_number: to ? to.value.trim() : "",
+      confirm: confirm && confirm.checked ? "true" : "",
+    };
+  }
+
   function showMsg(html) {
-    var msg = document.getElementById("console-msg");
-    if (msg) {
-      msg.innerHTML = html;
-      if (hasAnime()) window.anime.animate(msg, { translateX: [0, -6, 6, 0], duration: 300 });
-    }
+    toast(html);
   }
 
   function refreshTables() {
@@ -82,13 +145,21 @@
   function startNext() {
     if (!dialQueue.length) return;
     var cid = dialQueue[0];
-    postJSON("/partials/queue/start", { customer_id: cid }).then(function (html) {
+    var opts = dialOptions();
+    postJSON("/partials/queue/start", { customer_id: cid, mode: opts.mode, to_number: opts.to_number, confirm: opts.confirm }).then(function (html) {
       showMsg(html);
-      if (html.indexOf("open") !== -1) {
+      if (html.indexOf("open") !== -1 || html.indexOf("dialing") !== -1) {
         dialQueue.shift();
         saveQueue();
       }
       syncQueueUI();
+      refreshActive();
+    });
+  }
+
+  function stopActive() {
+    postJSON("/partials/calls/stop-active", {}).then(function (html) {
+      showMsg(html);
       refreshActive();
     });
   }
@@ -145,8 +216,16 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
+    if (!sessionActive()) {
+      var gate = document.getElementById("gateway");
+      if (gate) gate.classList.remove("hidden");
+    } else {
+      var g = document.getElementById("gateway");
+      if (g) g.classList.add("hidden");
+    }
     showSection("calls");
     syncQueueUI();
+    updateTabTitle();
     document.querySelectorAll("[data-nav]").forEach(function (btn) {
       btn.addEventListener("click", function () { showSection(btn.getAttribute("data-nav")); });
     });
@@ -184,7 +263,9 @@
     if (window.htmx) {
       document.body.addEventListener("htmx:afterSwap", function (event) {
         if (event.target.id === "console-msg") {
-          if (hasAnime()) window.anime.animate(event.target, { translateX: [0, -6, 6, 0], duration: 300 });
+          var stack = event.target;
+          while (stack.children.length > 3) stack.removeChild(stack.firstChild);
+          updateTabTitle();
           refreshActive();
           ["#queue-table", "#obs-calls-table", "#obs-handoffs-table"].forEach(function (sel) {
             var el = document.querySelector(sel);
@@ -204,7 +285,12 @@
     closeMenu();
     var saved = "";
     try { saved = window.localStorage.getItem("autopay_base_url") || ""; } catch (e) {}
-    document.getElementById("settings-base-url").value = saved;
+    var input = document.getElementById("settings-base-url");
+    if (!saved && input && !input.value) {
+      document.getElementById("settings-modal").classList.remove("hidden");
+      return;
+    }
+    if (input) input.value = saved || input.value;
     document.getElementById("settings-modal").classList.remove("hidden");
   }
 
@@ -222,20 +308,8 @@
   }
 
   function closeMenu() {
-    document.getElementById("profile-menu").classList.add("hidden");
-  }
-
-  function signOut() {
-    closeMenu();
-    var overlay = document.getElementById("signed-out");
-    overlay.classList.remove("hidden");
-    overlay.classList.add("flex");
-  }
-
-  function signIn() {
-    var overlay = document.getElementById("signed-out");
-    overlay.classList.add("hidden");
-    overlay.classList.remove("flex");
+    var menu = document.getElementById("profile-menu");
+    if (menu) menu.classList.add("hidden");
   }
 
   window.openModal = openModal;
@@ -245,9 +319,10 @@
   window.openSettings = openSettings;
   window.closeSettings = closeSettings;
   window.saveSettings = saveSettings;
-  window.signOut = signOut;
-  window.signIn = signIn;
+  window.enterConsole = enterConsole;
+  window.endSession = endSession;
   window.startNext = startNext;
+  window.stopActive = stopActive;
   window.clearQueue = clearQueue;
   window.refreshActive = refreshActive;
 })();

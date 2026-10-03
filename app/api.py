@@ -210,7 +210,6 @@ async def pay_page(request: Request, token: str):
 
 @app.get("/console", response_class=HTMLResponse)
 async def console_page(request: Request):
-    import os
     conn = get_conn()
     try:
         customers = [dict(r) for r in conn.execute(
@@ -230,6 +229,10 @@ async def console_page(request: Request):
     queue_count = len(queue["eligible"])
     eligible_ids = {c["customer_id"] for c in queue["eligible"]}
     customers.sort(key=lambda c: (c["customer_id"] not in eligible_ids, c["customer_id"]))
+    import os as _env
+    base_default = _env.environ.get("BASE_URL", "")
+    from app import provider as _provider
+    dest_hint = mask_phone(_provider.test_destination("")) if _provider.test_destination("") else ""
     return templates.TemplateResponse(
         request=request, name="console.html",
         context={"customers": customers, "funnel": funnel,
@@ -237,7 +240,7 @@ async def console_page(request: Request):
                  "call_count": calls, "open_handoffs": open_handoffs,
                  "queue_count": queue_count, "failed_count": funnel.get("failed", 0),
                  "at_risk": f"{at_risk:,.0f}", "open_calls": open_calls,
-                 "default_base": os.environ.get("BASE_URL", "")})
+                 "default_base": base_default, "dest_hint": dest_hint})
 
 
 @app.get("/partials/queue", response_class=HTMLResponse)
@@ -253,12 +256,66 @@ async def partial_active_call():
 
 @app.post("/partials/queue/start", response_class=HTMLResponse)
 async def partial_start(request: Request):
+    """Single Start Call button. mode=web opens the internal call row;
+    mode=phone additionally dials via Vapi (confirm required)."""
+    import os
+    from app import agent as agent_pkg, provider
     body = await _payload(request)
+    mode = (body.get("mode") or "web").strip().lower()
+    if mode not in ("web", "phone"):
+        mode = "web"
     try:
         started = tools.start_call(body.get("customer_id", ""), mode="web", source="dashboard")
     except ValueError as exc:
         return dash.message(str(exc), good=False)
+    if mode == "phone":
+        if str(body.get("confirm", "")).lower() not in ("true", "1", "on", "yes"):
+            return dash.message("phone mode needs the confirm checkbox (only call numbers you control)",
+                                good=False)
+        try:
+            conn = get_conn()
+            try:
+                row = conn.execute("select * from customers where customer_id = ?",
+                                   (started["customer_id"],)).fetchone()
+                prompt = agent_pkg.assemble_prompt(row, started["tier"], False, started["reasons"])
+            finally:
+                conn.close()
+            base_url = os.environ.get("BASE_URL", "")
+            placed = provider.start_phone_call(prompt, base_url,
+                                               body.get("to_number", ""),
+                                               confirm=True)
+            vapi_id = placed.get("id", "")
+            conn = get_conn()
+            try:
+                conn.execute("update calls set vapi_call_id = ? where call_id = ?",
+                             (vapi_id, started["call_id"]))
+                conn.commit()
+            finally:
+                conn.close()
+            dest = provider.test_destination(body.get("to_number", ""))
+            return dash.message(f"call {started['call_id']} dialing {mask_phone(dest)}"
+                                + (f" via {provider.vapi_phone_number}" if provider.vapi_phone_number else ""))
+        except Exception as exc:  # provider errors stay in-app, row stays open
+            return dash.message(f"call {started['call_id']} open but dial failed: {exc}", good=False)
     return dash.message(f"call {started['call_id']} open ({started['tier']}, p={started['p_pay']})")
+
+
+@app.post("/partials/calls/stop-active", response_class=HTMLResponse)
+async def partial_stop_active():
+    """Stop Call button: closes the latest open call as no_answer."""
+    conn = get_conn()
+    try:
+        row = conn.execute("select call_id from calls where outcome is null"
+                           " order by call_id desc limit 1").fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return dash.message("no live call to stop")
+    try:
+        tools.log_outcome(int(row["call_id"]), "no_answer", "stopped from console")
+    except (TypeError, ValueError) as exc:
+        return dash.message(str(exc), good=False)
+    return dash.message(f"call {row['call_id']} stopped")
 
 
 @app.get("/partials/customers", response_class=HTMLResponse)

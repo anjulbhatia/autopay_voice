@@ -21,13 +21,30 @@
     <script src="https://cdn.jsdelivr.net/npm/animejs/dist/bundles/anime.umd.min.js"></script>
   </head>
   <body class="flex h-screen flex-col overflow-hidden bg-neutral-50 text-neutral-800 antialiased text-[13px]">
+    <!-- ============ SESSION GATEWAY (first paint of every session) ============ -->
+    <div id="gateway" class="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-900 p-4">
+      <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <p class="text-[11px] font-bold uppercase tracking-widest text-primary-foreground">Authorized User Access Gateway</p>
+        <h1 class="mt-1 text-xl font-bold tracking-tight text-neutral-900">Merchant Console</h1>
+        <p class="mt-2 text-sm text-neutral-500">Local demo session. All records are synthetic — no real customer data, no real money movement.</p>
+        <label class="mt-4 block text-xs font-medium text-neutral-500">Operator Name
+          <input id="gateway-name" type="text" placeholder="Floor operator" autocomplete="off"
+                 class="mt-1 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm" />
+        </label>
+        <button onclick="enterConsole()"
+                class="mt-4 w-full rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-foreground hover:text-primary">
+          Enter Console
+        </button>
+      </div>
+    </div>
+
     <header class="shrink-0 border-b border-neutral-200 bg-white/85 backdrop-blur">
       <div class="mx-auto flex h-11 w-full items-center justify-between px-3">
         <span class="flex items-center gap-2">
           <img src="/assets/pay_icon.png" width="20" height="20" alt="AutoPay icon" />
           <h3 class="font-bold text-[15px] tracking-tight text-neutral-900">Console</h3>
           <span class="hidden sm:inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-700">
-            <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>live
+            <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>Live
           </span>
         </span>
         <span class="flex items-center gap-1.5">
@@ -45,7 +62,7 @@
                     class="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">M</button>
             <div id="profile-menu" class="hidden absolute right-0 mt-2 w-44 overflow-hidden rounded-lg border border-neutral-200 bg-white text-neutral-800 shadow-xl">
               <button onclick="openSettings()" class="flex w-full items-center gap-2 px-4 py-2.5 text-sm hover:bg-neutral-100 text-left">Settings</button>
-              <button onclick="signOut()" class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 text-left">Exit</button>
+              <button onclick="endSession()" class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 text-left">End Session</button>
             </div>
           </div>
         </span>
@@ -72,140 +89,156 @@
       </aside>
 
       <main class="flex-1 min-w-0 min-h-0 overflow-y-auto sm:overflow-visible">
-        <div id="console-msg" class="mb-1.5 text-sm empty:mb-0"></div>
-
         <!-- ============ CALLS ============ -->
-        <section data-section="calls" class="flex flex-col gap-1.5 min-h-0">
-          <div class="shrink-0 grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-            <div class="rounded-lg border border-neutral-200 bg-white px-2 py-1.5"><p class="text-[9px] font-semibold uppercase tracking-wider text-neutral-400">Queue</p><p class="text-lg leading-6 font-bold tabular-nums text-neutral-900">{{ queue_count }}</p></div>
-            <div class="rounded-lg border border-neutral-200 bg-white px-2 py-1.5"><p class="text-[9px] font-semibold uppercase tracking-wider text-neutral-400">Failed</p><p class="text-lg leading-6 font-bold tabular-nums text-neutral-900">{{ failed_count }}</p></div>
-            <div class="rounded-lg border border-neutral-200 bg-white px-2 py-1.5"><p class="text-[9px] font-semibold uppercase tracking-wider text-neutral-400">At risk</p><p class="text-lg leading-6 font-bold tabular-nums text-neutral-900">₹{{ at_risk }}</p></div>
-            <div class="rounded-lg border border-neutral-200 bg-white px-2 py-1.5"><p class="text-[9px] font-semibold uppercase tracking-wider text-neutral-400">Open calls</p><p class="text-lg leading-6 font-bold tabular-nums text-neutral-900">{{ open_calls }}</p></div>
-            <div class="rounded-lg border border-neutral-200 bg-white px-2 py-1.5"><p class="text-[9px] font-semibold uppercase tracking-wider text-neutral-400">Handoffs</p><p class="text-lg leading-6 font-bold tabular-nums text-neutral-900">{{ open_handoffs }}</p></div>
-            <div class="rounded-lg border border-primary-foreground/30 bg-primary px-2 py-1.5"><p class="text-[9px] font-semibold uppercase tracking-wider text-primary-foreground/70">Recovery</p><p class="text-lg leading-6 font-bold tabular-nums text-primary-foreground">{{ recovery_rate }}%</p></div>
+        <section data-section="calls" class="flex flex-col gap-2 min-h-0">
+          <div class="shrink-0 grid grid-cols-3 sm:grid-cols-6 gap-2">
+            <div class="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-2.5 py-2"><p class="text-[11px] font-semibold text-neutral-500">Queue</p><p class="text-base font-bold tabular-nums text-neutral-900">{{ queue_count }}</p></div>
+            <div class="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-2.5 py-2"><p class="text-[11px] font-semibold text-neutral-500">Failed</p><p class="text-base font-bold tabular-nums text-neutral-900">{{ failed_count }}</p></div>
+            <div class="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-2.5 py-2"><p class="text-[11px] font-semibold text-neutral-500">At Risk</p><p class="text-base font-bold tabular-nums text-neutral-900">₹{{ at_risk }}</p></div>
+            <div class="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-2.5 py-2"><p class="text-[11px] font-semibold text-neutral-500">Open Calls</p><p class="text-base font-bold tabular-nums text-neutral-900">{{ open_calls }}</p></div>
+            <div class="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-2.5 py-2"><p class="text-[11px] font-semibold text-neutral-500">Handoffs</p><p class="text-base font-bold tabular-nums text-neutral-900">{{ open_handoffs }}</p></div>
+            <div class="flex items-center justify-between rounded-lg border border-primary-foreground/30 bg-primary px-2.5 py-2"><p class="text-[11px] font-semibold text-primary-foreground/70">Recovery</p><p class="text-base font-bold tabular-nums text-primary-foreground">{{ recovery_rate }}%</p></div>
           </div>
 
-          <div class="shrink-0 rounded-lg border border-neutral-200 bg-white p-2 flex flex-wrap items-center gap-1.5">
-            <form hx-post="/partials/queue/start" hx-target="#console-msg" hx-swap="innerHTML" class="flex items-center gap-1.5">
-              <select id="dial-cid" name="customer_id" class="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs max-w-44">
+          <div class="shrink-0 rounded-xl border border-neutral-200 bg-white p-2.5">
+            <form id="dial-form" hx-post="/partials/queue/start" hx-target="#console-msg" hx-swap="innerHTML" class="flex flex-wrap items-center gap-1.5">
+              <select id="dial-cid" name="customer_id" title="Customer to call"
+                      class="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs max-w-48">
                 {% for c in customers %}<option value="{{ c['customer_id'] }}">{{ c['customer_id'] }} — {{ c['name'] }}</option>{% endfor %}
               </select>
-              <button class="rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary-foreground hover:text-primary transition-colors">Start call</button>
+              <select id="dial-mode" name="mode" title="Web opens an internal call row. Phone also dials via Vapi."
+                      class="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs">
+                <option value="web">Web Call</option>
+                <option value="phone">Phone Call</option>
+              </select>
+              <input id="dial-to" name="to_number" type="tel" autocomplete="off"
+                     title="Destination number. Uses TEST_CALL_TO_NUMBER when set{% if dest_hint %} (currently {{ dest_hint }}){% endif %}."
+                     placeholder="Call to…{% if dest_hint %} ({{ dest_hint }}){% endif %}"
+                     class="w-36 rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs font-mono" />
+              <label class="inline-flex items-center gap-1 text-[11px] text-neutral-500" title="Required for phone calls: confirm the destination is a number you control.">
+                <input id="dial-confirm" name="confirm" type="checkbox" value="true" class="h-3.5 w-3.5" /> Confirm
+              </label>
+              <button class="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary-foreground hover:text-primary transition-colors">Start Call</button>
+              <button type="button" onclick="stopActive()" title="Stop the live call"
+                      class="rounded-full border border-red-200 bg-white px-4 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors">Stop Call</button>
             </form>
-            <span class="hidden sm:block h-5 w-px bg-neutral-200"></span>
-            <input id="q-q" name="q" type="search" placeholder="filter queue…" autocomplete="off"
-                   hx-get="/partials/queue" hx-target="#queue-table" hx-swap="innerHTML" hx-trigger="keyup changed delay:300ms"
-                   hx-include="#q-tier,#q-mode"
-                   class="w-32 rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs" />
-            <select id="q-tier" name="tier" hx-get="/partials/queue" hx-target="#queue-table" hx-swap="innerHTML" hx-include="#q-q,#q-mode"
-                    class="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs">
-              <option value="all">all tiers</option><option value="short">short</option>
-              <option value="standard">standard</option><option value="extended">extended</option>
-            </select>
-            <select id="q-mode" name="mode" hx-get="/partials/queue" hx-target="#queue-table" hx-swap="innerHTML" hx-include="#q-q,#q-tier"
-                    class="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs">
-              <option value="expected_value">easiest value first</option>
-              <option value="easiest">easiest first</option>
-              <option value="highest">highest amount first</option>
-            </select>
-            <span class="ml-auto flex items-center gap-1.5">
-              <span id="q-count" class="rounded-full bg-neutral-100 px-2 py-1 font-mono text-[10px] text-neutral-500">0 in dial queue</span>
-              <button id="q-next" onclick="startNext()" class="rounded-full border border-primary-foreground bg-white px-3 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary-foreground hover:text-primary transition-colors disabled:opacity-40" disabled>Start next</button>
-              <button onclick="clearQueue()" class="rounded-full px-2 py-1 text-[11px] text-neutral-400 hover:text-neutral-900">clear</button>
-            </span>
+            <div class="mt-2 flex flex-wrap items-center gap-1.5 border-t border-neutral-100 pt-2">
+              <input id="q-q" name="q" type="search" placeholder="Filter queue…" autocomplete="off"
+                     hx-get="/partials/queue" hx-target="#queue-table" hx-swap="innerHTML" hx-trigger="keyup changed delay:300ms"
+                     hx-include="#q-tier,#q-mode"
+                     class="w-32 rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs" />
+              <select id="q-tier" name="tier" hx-get="/partials/queue" hx-target="#queue-table" hx-swap="innerHTML" hx-include="#q-q,#q-mode"
+                      class="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs" title="Filter by call tier">
+                <option value="all">All Tiers</option><option value="short">Short</option>
+                <option value="standard">Standard</option><option value="extended">Extended</option>
+              </select>
+              <select id="q-mode" name="mode" hx-get="/partials/queue" hx-target="#queue-table" hx-swap="innerHTML" hx-include="#q-q,#q-tier"
+                      class="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs" title="Queue ordering">
+                <option value="expected_value">Expected Value First</option>
+                <option value="easiest">Easiest First</option>
+                <option value="highest">Highest Amount First</option>
+              </select>
+              <span class="ml-auto flex items-center gap-1.5">
+                <span id="q-count" class="rounded-full bg-neutral-100 px-2 py-1 font-mono text-[10px] text-neutral-500">0 in dial queue</span>
+                <button id="q-next" onclick="startNext()" title="Start the next queued customer"
+                        class="rounded-full border border-primary-foreground bg-white px-3 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary-foreground hover:text-primary transition-colors disabled:opacity-40" disabled>Start Next</button>
+                <button onclick="clearQueue()" title="Clear the dial queue" class="rounded-full px-2 py-1 text-[11px] text-neutral-400 hover:text-neutral-900">Clear</button>
+              </span>
+            </div>
           </div>
 
-          <div class="min-h-0 grid gap-1.5 sm:grid-cols-5">
-            <!-- On-call unit FIRST on mobile -->
-            <div class="order-1 sm:order-2 sm:col-span-2 rounded-lg border border-primary-foreground bg-white p-2 flex flex-col min-h-0 sm:max-h-[calc(100vh-240px)]">
-              <div class="shrink-0 flex items-center justify-between gap-2">
-                <h2 class="text-[13px] font-bold tracking-tight text-neutral-900">On call now <span class="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-green-500 align-middle"></span></h2>
-                <button onclick="refreshActive()" class="rounded-full border border-neutral-200 px-2 py-0.5 text-[11px] text-neutral-500 hover:text-neutral-900">refresh</button>
+          <div class="min-h-0 grid gap-2 sm:grid-cols-5">
+            <div class="order-1 sm:order-2 sm:col-span-2 rounded-xl border border-primary-foreground bg-white p-3">
+              <div class="flex items-center justify-between gap-2">
+                <h2 class="text-[13px] font-bold tracking-tight text-neutral-900">On Call Now <span class="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-green-500 align-middle"></span></h2>
+                <button onclick="refreshActive()" class="rounded-full border border-neutral-200 px-2 py-0.5 text-[11px] text-neutral-500 hover:text-neutral-900">Refresh</button>
               </div>
-              <div id="active-call" hx-get="/partials/active-call" hx-trigger="load, every 10s, refresh" class="mt-1 min-h-0 overflow-auto"></div>
+              <div id="active-call" hx-get="/partials/active-call" hx-trigger="load, every 10s, refresh" class="mt-1"></div>
             </div>
-            <!-- Queue second on mobile -->
-            <div class="order-2 sm:order-1 sm:col-span-3 rounded-lg border border-neutral-200 bg-white p-2 flex flex-col min-h-0 sm:max-h-[calc(100vh-240px)]">
-              <div class="shrink-0 flex items-center justify-between gap-2">
-                <h2 class="text-[13px] font-bold tracking-tight text-neutral-900">Queue <span class="font-mono text-[11px] font-medium text-neutral-400">tick = add to dial queue in order</span></h2>
+            <div class="order-2 sm:order-1 sm:col-span-3 rounded-xl border border-neutral-200 bg-white p-3">
+              <div class="flex items-center justify-between gap-2">
+                <h2 class="text-[13px] font-bold tracking-tight text-neutral-900">Queue <span class="font-mono text-[11px] font-medium text-neutral-400">Tick to add to the dial queue</span></h2>
               </div>
-              <div id="queue-table" hx-get="/partials/queue" hx-trigger="load, refresh" class="mt-1 flex-1 min-h-[200px] overflow-auto"></div>
+              <div id="queue-table" hx-get="/partials/queue" hx-trigger="load, refresh" class="mt-1 min-h-[200px] overflow-auto"></div>
             </div>
           </div>
         </section>
 
         <!-- ============ CUSTOMERS ============ -->
-        <section data-section="customers" class="hidden flex-col gap-1.5 min-h-0">
-          <div class="shrink-0 grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-            <div class="rounded-lg border border-neutral-200 bg-white px-2 py-1.5"><p class="text-[9px] font-semibold uppercase tracking-wider text-neutral-400">Total</p><p class="text-lg leading-6 font-bold tabular-nums">{{ customers|length }}</p></div>
-            <div class="rounded-lg border border-neutral-200 bg-white px-2 py-1.5"><p class="text-[9px] font-semibold uppercase tracking-wider text-neutral-400">Failed</p><p class="text-lg leading-6 font-bold tabular-nums">{{ funnel.get('failed', 0) }}</p></div>
-            <div class="rounded-lg border border-neutral-200 bg-white px-2 py-1.5"><p class="text-[9px] font-semibold uppercase tracking-wider text-neutral-400">Link sent</p><p class="text-lg leading-6 font-bold tabular-nums">{{ funnel.get('link_sent', 0) }}</p></div>
-            <div class="rounded-lg border border-neutral-200 bg-white px-2 py-1.5"><p class="text-[9px] font-semibold uppercase tracking-wider text-neutral-400">Recovered</p><p class="text-lg leading-6 font-bold tabular-nums">{{ funnel.get('recovered', 0) }}</p></div>
-            <div class="rounded-lg border border-neutral-200 bg-white px-2 py-1.5"><p class="text-[9px] font-semibold uppercase tracking-wider text-neutral-400">Handoff</p><p class="text-lg leading-6 font-bold tabular-nums">{{ funnel.get('handoff', 0) }}</p></div>
-            <div class="rounded-lg border border-primary-foreground/30 bg-primary px-2 py-1.5"><p class="text-[9px] font-semibold uppercase tracking-wider text-primary-foreground/70">At risk</p><p class="text-lg leading-6 font-bold tabular-nums text-primary-foreground">₹{{ at_risk }}</p></div>
+        <section data-section="customers" class="hidden flex-col gap-2 min-h-0">
+          <div class="shrink-0 grid grid-cols-3 sm:grid-cols-6 gap-2">
+            <div class="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-2.5 py-2"><p class="text-[11px] font-semibold text-neutral-500">Total</p><p class="text-base font-bold tabular-nums">{{ customers|length }}</p></div>
+            <div class="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-2.5 py-2"><p class="text-[11px] font-semibold text-neutral-500">Failed</p><p class="text-base font-bold tabular-nums">{{ funnel.get('failed', 0) }}</p></div>
+            <div class="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-2.5 py-2"><p class="text-[11px] font-semibold text-neutral-500">Link Sent</p><p class="text-base font-bold tabular-nums">{{ funnel.get('link_sent', 0) }}</p></div>
+            <div class="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-2.5 py-2"><p class="text-[11px] font-semibold text-neutral-500">Recovered</p><p class="text-base font-bold tabular-nums">{{ funnel.get('recovered', 0) }}</p></div>
+            <div class="flex items-center justify-between rounded-lg border border-neutral-200 bg-white px-2.5 py-2"><p class="text-[11px] font-semibold text-neutral-500">Handoff</p><p class="text-base font-bold tabular-nums">{{ funnel.get('handoff', 0) }}</p></div>
+            <div class="flex items-center justify-between rounded-lg border border-primary-foreground/30 bg-primary px-2.5 py-2"><p class="text-[11px] font-semibold text-primary-foreground/70">At Risk</p><p class="text-base font-bold tabular-nums text-primary-foreground">₹{{ at_risk }}</p></div>
           </div>
-          <div class="shrink-0 rounded-lg border border-neutral-200 bg-white p-2 flex flex-wrap items-center gap-1.5">
-            <h2 class="text-[13px] font-bold tracking-tight text-neutral-900 mr-auto">Customers <span class="font-mono text-[11px] font-medium text-neutral-400">click row = full record</span></h2>
-            <input id="c-q" name="q" type="search" placeholder="search id / name…" autocomplete="off"
+          <div class="shrink-0 rounded-xl border border-neutral-200 bg-white p-2.5 flex flex-wrap items-center gap-1.5">
+            <h2 class="text-[13px] font-bold tracking-tight text-neutral-900 mr-auto">Customers <span class="font-mono text-[11px] font-medium text-neutral-400">Click a row for history</span></h2>
+            <input id="c-q" name="q" type="search" placeholder="Search ID or name…" autocomplete="off"
                    hx-get="/partials/customers" hx-target="#customers-table" hx-swap="innerHTML" hx-trigger="keyup changed delay:300ms"
                    hx-include="#c-status"
                    class="w-40 rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs" />
             <select id="c-status" name="status" hx-get="/partials/customers" hx-target="#customers-table" hx-swap="innerHTML" hx-include="#c-q"
-                    class="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs">
-              <option value="all">all</option><option value="failed">failed</option>
-              <option value="link_sent">link_sent</option><option value="recovered">recovered</option>
-              <option value="handoff">handoff</option><option value="opted_out">opted_out</option>
+                    class="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs" title="Filter by payment status">
+              <option value="all">All</option><option value="failed">Failed</option>
+              <option value="link_sent">Link Sent</option><option value="recovered">Recovered</option>
+              <option value="handoff">Handoff</option><option value="opted_out">Opted Out</option>
             </select>
           </div>
-          <div class="rounded-lg border border-neutral-200 bg-white p-2 flex flex-col min-h-0 sm:max-h-[calc(100vh-290px)]">
-            <div id="customers-table" hx-get="/partials/customers" hx-trigger="load, refresh" class="flex-1 min-h-[200px] overflow-auto"></div>
+          <div class="rounded-xl border border-neutral-200 bg-white p-3">
+            <div id="customers-table" hx-get="/partials/customers" hx-trigger="load, refresh" class="min-h-[240px] overflow-auto"></div>
           </div>
         </section>
 
-        <!-- ============ OBSERVE: call logs → handoffs → audit ============ -->
-        <section data-section="observability" class="hidden min-h-0 sm:grid sm:grid-cols-2 gap-1.5">
-          <div class="order-1 rounded-lg border border-neutral-200 bg-white p-2 flex flex-col min-h-0 sm:max-h-[calc(100vh-190px)]">
-            <div class="shrink-0 flex flex-wrap items-center gap-1.5">
-              <h2 class="text-[13px] font-bold tracking-tight text-neutral-900 mr-auto">Call records <span class="font-mono text-[11px] font-medium text-neutral-400">click = transcript + handoff + audit</span></h2>
-              <input id="o-cq" name="q" type="search" placeholder="call / cust…" autocomplete="off"
+        <!-- ============ OBSERVE ============ -->
+        <section data-section="observability" class="hidden min-h-0 sm:grid sm:grid-cols-2 gap-2">
+          <div class="rounded-xl border border-neutral-200 bg-white p-3">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <h2 class="text-[13px] font-bold tracking-tight text-neutral-900 mr-auto">Call Records <span class="font-mono text-[11px] font-medium text-neutral-400">Click for transcript</span></h2>
+              <input id="o-cq" name="q" type="search" placeholder="Call or customer…" autocomplete="off"
                      hx-get="/partials/calls" hx-target="#obs-calls-table" hx-swap="innerHTML" hx-trigger="keyup changed delay:300ms"
-                     hx-include="#o-out" class="w-28 rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs" />
+                     hx-include="#o-out" class="w-32 rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs" />
               <select id="o-out" name="outcome" hx-get="/partials/calls" hx-target="#obs-calls-table" hx-swap="innerHTML" hx-include="#o-cq"
-                      class="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs">
-                <option value="all">all</option><option value="open">open</option><option value="link_sent">link_sent</option>
-                <option value="handoff">handoff</option><option value="no_answer">no_answer</option>
-                <option value="failed">failed</option><option value="refused">refused</option><option value="opted_out">opted_out</option>
+                      class="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs" title="Filter by outcome">
+                <option value="all">All</option><option value="open">Open</option><option value="link_sent">Link Sent</option>
+                <option value="handoff">Handoff</option><option value="no_answer">No Answer</option>
+                <option value="failed">Failed</option><option value="refused">Refused</option><option value="opted_out">Opted Out</option>
               </select>
             </div>
-            <div id="obs-calls-table" hx-get="/partials/calls" hx-trigger="load, refresh" class="mt-1 flex-1 min-h-[200px] overflow-auto"></div>
+            <div id="obs-calls-table" hx-get="/partials/calls" hx-trigger="load, refresh" class="mt-2 min-h-[380px] overflow-auto"></div>
           </div>
-          <div class="order-2 grid gap-1.5 min-h-0">
-            <div class="rounded-lg border border-neutral-200 bg-white p-2 flex flex-col min-h-0 sm:max-h-[calc(100vh-460px)]">
-              <div class="shrink-0 flex flex-wrap items-center gap-1.5">
+          <div class="grid gap-2">
+            <div class="rounded-xl border border-neutral-200 bg-white p-3">
+              <div class="flex flex-wrap items-center gap-1.5">
                 <h2 class="text-[13px] font-bold tracking-tight text-neutral-900 mr-auto">Handoffs</h2>
-                <input id="o-hq" name="q" type="search" placeholder="cust / reason…" autocomplete="off"
+                <input id="o-hq" name="q" type="search" placeholder="Customer or reason…" autocomplete="off"
                        hx-get="/partials/handoffs" hx-target="#obs-handoffs-table" hx-swap="innerHTML" hx-trigger="keyup changed delay:300ms"
-                       hx-include="#o-open" class="w-32 rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs" />
+                       hx-include="#o-open" class="w-36 rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs" />
                 <select id="o-open" name="open" hx-get="/partials/handoffs" hx-target="#obs-handoffs-table" hx-swap="innerHTML" hx-include="#o-hq"
-                        class="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs">
-                  <option value="1">open</option><option value="0">all</option>
+                        class="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs" title="Open or all handoffs">
+                  <option value="1">Open</option><option value="0">All</option>
                 </select>
               </div>
-              <div id="obs-handoffs-table" hx-get="/partials/handoffs?open=0" hx-trigger="load, refresh" class="mt-1 flex-1 min-h-[140px] overflow-auto"></div>
+              <div id="obs-handoffs-table" hx-get="/partials/handoffs?open=0" hx-trigger="load, refresh" class="mt-2 min-h-[180px] overflow-auto"></div>
             </div>
-            <div class="order-3 rounded-lg border border-neutral-200 bg-white p-2 flex flex-col min-h-0 sm:max-h-[calc(100vh-460px)]">
-              <div class="shrink-0 flex items-center gap-1.5">
-                <h2 class="text-[13px] font-bold tracking-tight text-neutral-900 mr-auto">Audit</h2>
-                <input id="o-aq" name="q" type="search" placeholder="tool / actor…" autocomplete="off"
+            <div class="rounded-xl border border-neutral-200 bg-white p-3">
+              <div class="flex items-center gap-1.5">
+                <h2 class="text-[13px] font-bold tracking-tight text-neutral-900 mr-auto">Audit Trail</h2>
+                <input id="o-aq" name="q" type="search" placeholder="Tool or actor…" autocomplete="off"
                        hx-get="/partials/audit?limit=100" hx-target="#obs-audit-table" hx-swap="innerHTML" hx-trigger="keyup changed delay:300ms"
-                       class="w-32 rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs" />
+                       class="w-36 rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs" />
               </div>
-              <div id="obs-audit-table" hx-get="/partials/audit?limit=100" hx-trigger="load, refresh" class="mt-1 flex-1 min-h-[140px] overflow-auto"></div>
+              <div id="obs-audit-table" hx-get="/partials/audit?limit=100" hx-trigger="load, refresh" class="mt-2 min-h-[180px] overflow-auto"></div>
             </div>
           </div>
         </section>
       </main>
     </div>
+
+    <!-- Toast notifications (all action feedback lands here, not atop the page) -->
+    <div id="console-msg" aria-live="polite" class="pointer-events-none fixed bottom-4 right-4 z-[55] flex w-80 max-w-[85vw] flex-col gap-2 empty:hidden"></div>
 
     <div id="logs-drawer" class="hidden fixed inset-y-0 right-0 z-50 w-80 max-w-[85vw] flex flex-col border-l border-neutral-200 bg-white shadow-2xl">
       <div class="flex items-center justify-between border-b border-neutral-100 px-4 py-3">
@@ -218,19 +251,19 @@
 
     <div id="modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
       <div id="modal-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-[2px]"></div>
-      <div id="modal-card" class="relative bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-auto p-5">
+      <div id="modal-card" class="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[88vh] overflow-y-auto p-6">
         <button onclick="closeModal()" aria-label="Close"
-                class="absolute top-3 right-3 h-8 w-8 inline-flex items-center justify-center rounded-full bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 transition-colors">×</button>
-        <div id="modal-body" class="text-sm">loading…</div>
+                class="absolute top-4 right-4 h-8 w-8 inline-flex items-center justify-center rounded-full bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 transition-colors">×</button>
+        <div id="modal-body" class="text-sm pr-6">Loading…</div>
       </div>
     </div>
 
     <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onclick="closeSettings()"></div>
-      <div class="relative bg-white rounded-xl shadow-2xl max-w-md w-full p-5">
+      <div class="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
         <h2 class="text-base font-bold tracking-tight text-neutral-900">Settings</h2>
-        <label class="mt-3 block text-xs font-medium text-neutral-500">Public base URL
-          <input id="settings-base-url" type="text" placeholder="https://<tunnel>.trycloudflare.com"
+        <label class="mt-3 block text-xs font-medium text-neutral-500">Public Base URL
+          <input id="settings-base-url" type="text" placeholder="https://<tunnel>.trycloudflare.com" value="{{ default_base }}"
                  class="mt-1 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm font-mono" />
         </label>
         <p class="mt-1 text-xs text-neutral-400">Links render as BaseURL/pay/*. Stored in this browser only.</p>
@@ -239,12 +272,6 @@
           <button onclick="saveSettings()" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-foreground hover:text-primary">Save</button>
         </div>
       </div>
-    </div>
-
-    <div id="signed-out" class="hidden fixed inset-0 z-50 flex-col items-center justify-center bg-neutral-900 text-white">
-      <p class="text-xl font-bold tracking-tight">Signed out</p>
-      <p class="mt-1 text-sm text-white/60">Floor closed for this session.</p>
-      <button onclick="signIn()" class="mt-5 rounded-lg bg-white px-5 py-2 text-sm font-semibold text-neutral-900">Sign back in</button>
     </div>
 
     <script src="/assets/console.js"></script>

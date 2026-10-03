@@ -21,7 +21,7 @@ def test_console_flows(tmp_path, monkeypatch):
     queue = client.get("/partials/queue?mode=easiest")
     assert queue.status_code == 200 and "CUST" in queue.text
     assert "CUST" in client.get("/partials/customers?status=failed").text
-    assert "no calls yet" in client.get("/partials/calls").text
+    assert "no calls yet" in client.get("/partials/calls").text.lower()
     assert "reason" in client.get("/partials/handoffs").text.lower() or "none" in client.get("/partials/handoffs").text
     assert "ingest_customers_data" in client.get("/partials/audit").text
     assert "ingest_customers_data" in client.get("/partials/events").text
