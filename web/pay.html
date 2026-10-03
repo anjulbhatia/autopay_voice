@@ -75,7 +75,7 @@
           {% if amount_due %}{{ '₹' if currency == 'INR' else '$' }}{{ '{:,.2f}'.format(amount_due) }}{% else %}$ 0.00{% endif %}
         </h2>
         <p class="mt-1 text-sm text-neutral-600">
-          This link expires in <span id="expiry-ticker" data-expires-seconds="600" class="inline-block rounded-md bg-neutral-200 px-2 py-0.5 font-mono font-semibold text-primary-foreground">10:00</span>
+          This link expires in <span id="expiry-ticker" data-expires-seconds="{{ expires_in | default(600) }}" class="inline-block rounded-md bg-neutral-200 px-2 py-0.5 font-mono font-semibold text-primary-foreground">10:00</span>
         </p>
         <p id="expiry-note" class="hidden mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">This link has expired. Please request a fresh link.</p>
         <div class="mx-auto mt-4 min-w-[85%] divide-y divide-neutral-100 text-left text-sm">

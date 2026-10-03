@@ -63,13 +63,19 @@ async def pay_result(body: pay_result_in):
 
 @app.get("/pay/{token}", response_class=HTMLResponse)
 async def pay_page(request: Request, token: str):
-    # amount_due / customer_name / phone stay blank until token->link lookup lands.
+    # Real link lookup: unknown -> 404, used/expired -> dismissed render.
     # currency drives the Jinja symbol pick (INR -> ₹, else $).
-    # transaction_id is a demo derivation from the token.
+    from app.tools import get_link_context
+    found = get_link_context(token)
+    if found["status"] == "unknown":
+        raise HTTPException(status_code=404, detail="unknown token")
+    customer = found["customer"]
     return templates.TemplateResponse(
         request=request,
         name="pay.html",
         context={"token_id": token, "merchant_name": "Demo Merchant",
-                 "amount_due": None, "currency": "INR", "customer_name": "",
-                 "phone": "", "transaction_id": "TXN-" + token[:8].upper()},
+                 "amount_due": customer["amount_due"], "currency": "INR",
+                 "customer_name": customer["name"], "phone": customer["phone"],
+                 "transaction_id": "TXN-" + token[:8].upper(),
+                 "expires_in": found["expires_in"]},
     )
