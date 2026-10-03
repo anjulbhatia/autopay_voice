@@ -10,6 +10,7 @@ dependencies = [
     "httpx>=0.28.1",
     "python-dotenv>=1.2.4",
     "streamlit>=1.64.0",
+    "streamlit-extras>=1.6.0",
     "vapi-server-sdk>=1.11.1",
 ]
 

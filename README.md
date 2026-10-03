@@ -13,6 +13,8 @@ uv run autopay test         # tests
 ```
 
 Open `http://127.0.0.1:8000/pay/<token>` for the customer payment page.
+Merchant console (HTMX, local only): `http://127.0.0.1:8000/console` —
+queue, live calls, manual links, handoffs, audit. Calls start here only.
 
 Docs: [installation](docs/installation.md) · [architecture](docs/architecture.md) ·
 [ranking](docs/ranking.md) · [call workflow](docs/call-workflow.md).
