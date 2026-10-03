@@ -1,4 +1,3 @@
-"""FastAPI app: payment page + static assets, both served from web/."""
 import json
 from pathlib import Path
 from typing import Literal, Optional
@@ -19,6 +18,28 @@ app = FastAPI(title="autopay_voice (synthetic demo)")
 
 app.mount("/assets", StaticFiles(directory=web_dir / "assets"), name="assets")
 templates = Jinja2Templates(directory=web_dir)
+
+
+async def _payload(request: Request) -> dict:
+    """Accept JSON (tests, fetch) and urlencoded form (htmx forms)."""
+    ctype = request.headers.get("content-type", "")
+    if "application/json" in ctype:
+        try:
+            body = await request.json()
+            return body if isinstance(body, dict) else {}
+        except ValueError:
+            return {}
+    try:
+        body = await request.json()
+        if isinstance(body, dict):
+            return body
+    except ValueError:
+        pass
+    try:
+        form = await request.form()
+        return {k: v for k, v in form.items()}
+    except ValueError:
+        return {}
 
 
 class pay_result_in(BaseModel):
@@ -181,23 +202,38 @@ async def console_page(request: Request):
             "select payment_status, count(*) as n from customers group by payment_status").fetchall()}
         total = sum(funnel.values()) or 1
         calls = conn.execute("select count(*) from calls").fetchone()[0]
+        open_handoffs = conn.execute("select count(*) from handoffs where status = 'open'").fetchone()[0]
+        open_calls = conn.execute("select count(*) from calls where outcome is null").fetchone()[0]
+        at_risk = conn.execute("select coalesce(sum(amount_due), 0) from customers"
+                               " where payment_status = 'failed'").fetchone()[0]
     finally:
         conn.close()
+    from app import tools as campaign_tools
+    queue_count = len(campaign_tools.masked_queue()["eligible"])
     return templates.TemplateResponse(
-        request=request, name="dashboard.html",
+        request=request, name="console.html",
         context={"customers": customers, "funnel": funnel,
                  "recovery_rate": round(100 * funnel.get("recovered", 0) / total),
-                 "call_count": calls, "default_base": os.environ.get("BASE_URL", "")})
+                 "call_count": calls, "open_handoffs": open_handoffs,
+                 "queue_count": queue_count, "failed_count": funnel.get("failed", 0),
+                 "at_risk": f"{at_risk:,.0f}", "open_calls": open_calls,
+                 "default_base": os.environ.get("BASE_URL", "")})
 
 
 @app.get("/partials/queue", response_class=HTMLResponse)
-async def partial_queue(mode: str = "expected_value"):
-    return dash.queue_partial(mode if mode in ("expected_value", "easiest", "highest") else "expected_value")
+async def partial_queue(mode: str = "expected_value", q: str = "", tier: str = "all"):
+    return dash.queue_partial(mode if mode in ("expected_value", "easiest", "highest") else "expected_value",
+                              q=q, tier=tier)
+
+
+@app.get("/partials/active-call", response_class=HTMLResponse)
+async def partial_active_call():
+    return dash.active_call_partial()
 
 
 @app.post("/partials/queue/start", response_class=HTMLResponse)
 async def partial_start(request: Request):
-    body = await request.json()
+    body = await _payload(request)
     try:
         started = tools.start_call(body.get("customer_id", ""), mode="web", source="dashboard")
     except ValueError as exc:
@@ -206,37 +242,65 @@ async def partial_start(request: Request):
 
 
 @app.get("/partials/customers", response_class=HTMLResponse)
-async def partial_customers(status: str = "all"):
-    return dash.customers_partial(status)
+async def partial_customers(status: str = "all", q: str = ""):
+    return dash.customers_partial(status, q)
+
+
+@app.get("/partials/customers/{customer_id}", response_class=HTMLResponse)
+async def partial_customer_detail(customer_id: str):
+    found = dash.customer_detail_partial(customer_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail="unknown customer")
+    return found
 
 
 @app.get("/partials/calls", response_class=HTMLResponse)
-async def partial_calls():
-    return dash.calls_partial()
+async def partial_calls(q: str = "", outcome: str = "all"):
+    return dash.calls_partial(q=q, outcome=outcome)
+
+
+@app.post("/partials/calls/outcome", response_class=HTMLResponse)
+async def partial_outcome(request: Request):
+    body = await _payload(request)
+    tools.log_outcome(int(body.get("call_id", 0)), body.get("outcome", "failed"),
+                      str(body.get("notes", ""))[:200])
+    return dash.message(f"call {body.get('call_id')} → {body.get('outcome')}")
 
 
 @app.post("/partials/calls/cut", response_class=HTMLResponse)
 async def partial_cut(request: Request):
-    body = await request.json()
+    body = await _payload(request)
     tools.log_outcome(int(body.get("call_id", 0)), "no_answer", "cut from console")
     return dash.message(f"call {body.get('call_id')} cut")
 
 
 @app.post("/partials/calls/join", response_class=HTMLResponse)
 async def partial_join(request: Request):
-    body = await request.json()
+    body = await _payload(request)
     result = tools.request_human_handoff(int(body.get("call_id", 0)), "human_joined", "merchant joined")
     return dash.message(f"joined — handoff {result['handoff_id']} open")
 
 
 @app.get("/partials/handoffs", response_class=HTMLResponse)
-async def partial_handoffs(open: int = 1):
-    return dash.handoffs_partial(bool(open))
+async def partial_handoffs(open: int = 1, q: str = ""):
+    return dash.handoffs_partial(bool(open), q)
+
+
+@app.post("/partials/handoffs/create", response_class=HTMLResponse)
+async def partial_handoff_create(request: Request):
+    body = await _payload(request)
+    try:
+        result = tools.request_human_handoff(int(body.get("call_id", 0)),
+                                             body.get("reason", "asked_for_human"),
+                                             str(body.get("notes", ""))[:500])
+    except ValueError as exc:
+        return dash.message(str(exc), good=False)
+    return dash.message(f"handoff {result['handoff_id']} open for call {body.get('call_id')}")
 
 
 @app.post("/partials/handoffs/resolve", response_class=HTMLResponse)
 async def partial_resolve(request: Request):
-    body = await request.json()
+    body = await _payload(request)
     conn = get_conn()
     try:
         conn.execute("update handoffs set status = 'done', resolved_at = ? where handoff_id = ?",
@@ -250,8 +314,8 @@ async def partial_resolve(request: Request):
 
 
 @app.get("/partials/audit", response_class=HTMLResponse)
-async def partial_audit(limit: int = 50):
-    return dash.audit_partial(max(1, min(limit, 200)))
+async def partial_audit(limit: int = 50, q: str = "", call_id: Optional[int] = None):
+    return dash.audit_partial(max(1, min(limit, 200)), q=q, call_id=call_id)
 
 
 @app.get("/partials/events", response_class=HTMLResponse)
@@ -259,14 +323,36 @@ async def partial_events():
     return dash.events_partial()
 
 
+@app.get("/partials/calls/{call_id}", response_class=HTMLResponse)
+async def partial_call_detail(call_id: int):
+    found = dash.call_detail_partial(call_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail="unknown call")
+    return found
+
+
+@app.get("/partials/handoffs/{handoff_id}", response_class=HTMLResponse)
+async def partial_handoff_detail(handoff_id: int):
+    found = dash.handoff_detail_partial(handoff_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail="unknown handoff")
+    return found
+
+
 @app.post("/partials/links", response_class=HTMLResponse)
 async def partial_link(request: Request):
     import os
-    body = await request.json()
+    body = await _payload(request)
     customer_id = body.get("customer_id", "")
     channel = body.get("channel", "console")
+    call_id = body.get("call_id") or None
+    try:
+        call_id = int(call_id) if call_id else None
+    except (TypeError, ValueError):
+        call_id = None
     link = tools.create_payment_link(customer_id, body.get("kind", "pay_now"), channel,
-                                     body.get("base_url") or None, int(body.get("ttl", 10)))
+                                     body.get("base_url") or None, int(body.get("ttl", 10)),
+                                     call_id=call_id)
     conn = get_conn()
     try:
         person = conn.execute("select name, phone, amount_due from customers where customer_id = ?",

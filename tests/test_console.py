@@ -43,4 +43,10 @@ def test_console_flows(tmp_path, monkeypatch):
     assert "resolved" in resolved.text
     cut = client.post("/partials/calls/cut", json={"call_id": call_id})
     assert "cut" in cut.text
+    detail = client.get(f"/partials/calls/{call_id}")
+    assert detail.status_code == 200 and "CUST002" in detail.text
+    assert client.get("/partials/calls/99999").status_code == 404
+    hdetail = client.get(f"/partials/handoffs/{hand_id}")
+    assert hdetail.status_code == 200 and "human_joined" in hdetail.text
+    assert client.get("/partials/handoffs/99999").status_code == 404
     conn.close()
