@@ -93,7 +93,7 @@
     });
   }
 
-  var nav_on = ["bg-neutral-900", "text-white", "font-semibold"];
+  var nav_on = ["bg-primary", "text-primary-foreground", "font-semibold"];
   var nav_off = ["text-neutral-500"];
 
   function toggleLogs(force) {

@@ -19,7 +19,7 @@ status_pill = {
 }
 
 outcome_pill = {
-    "open": "bg-neutral-900 text-white",
+    "open": "bg-primary text-primary-foreground",
     "link_sent": "bg-amber-100 text-amber-800",
     "retry_scheduled": "bg-blue-100 text-blue-800",
     "handoff": "bg-blue-100 text-blue-800",
@@ -30,8 +30,8 @@ outcome_pill = {
     "failed": "bg-red-100 text-red-800",
 }
 
-btn_primary = ("rounded-full bg-neutral-900 px-3.5 py-1.5 text-xs font-semibold text-white "
-               "hover:bg-black transition-colors disabled:opacity-40")
+btn_primary = ("rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground "
+               "hover:bg-primary-foreground hover:text-primary transition-colors disabled:opacity-40")
 btn_ghost = ("rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-600 "
              "hover:border-neutral-300 hover:text-neutral-900 transition-colors")
 btn_danger = ("rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 "
@@ -48,7 +48,7 @@ def score_bar(prob):
     pct = max(4, min(100, int(float(prob) * 100)))
     return (f"<span class='inline-flex items-center gap-1.5'>"
             f"<span class='inline-block h-1.5 w-14 overflow-hidden rounded-full bg-neutral-100'>"
-            f"<span class='block h-1.5 rounded-full bg-neutral-900' style='width:{pct}%'></span></span>"
+            f"<span class='block h-1.5 rounded-full bg-primary-foreground' style='width:{pct}%'></span></span>"
             f"<span class='font-mono text-xs'>{prob}</span></span>")
 
 
@@ -69,7 +69,7 @@ def queue_partial(mode="expected_value", q="", tier="all"):
             and (not q or q in c["customer_id"].lower() or q in (c.get("name") or "").lower())]
     body = "".join(
         f"<tr class='border-t border-neutral-100 transition-colors hover:bg-[#faf8fd]' data-cid='{esc(c['customer_id'])}'>"
-        f"<td class='py-2 pl-1 pr-1'><input type='checkbox' class='qpick h-3.5 w-3.5 accent-neutral-900' "
+        f"<td class='py-2 pl-1 pr-1'><input type='checkbox' class='qpick h-3.5 w-3.5 accent-primary-foreground' "
         f"data-cid='{esc(c['customer_id'])}' aria-label='add {esc(c['customer_id'])} to dial queue' /></td>"
         f"<td class='py-2 pr-2 font-mono text-[12px] font-medium'>{esc(c['customer_id'])}</td>"
         f"<td class='py-2 pr-2 font-medium text-[13px]'>{esc(c.get('name', ''))}</td>"
@@ -85,7 +85,7 @@ def queue_partial(mode="expected_value", q="", tier="all"):
         for c in rows
     ) or empty_row("queue empty — everyone is capped, cooling down, or opted out")
     return (f"<table class='w-full text-left text-sm'><thead class='sticky top-0 bg-white'><tr class='text-[10px] uppercase tracking-wider text-neutral-400'>"
-            f"<th class='pb-1.5 pl-1 pr-1 font-semibold w-6'><input type='checkbox' id='q-all' class='h-3.5 w-3.5 accent-neutral-900' title='select all' /></th>"
+            f"<th class='pb-1.5 pl-1 pr-1 font-semibold w-6'><input type='checkbox' id='q-all' class='h-3.5 w-3.5 accent-primary-foreground' title='select all' /></th>"
             f"<th class='pb-1.5 pr-2 font-semibold'>ID</th><th class='pb-1.5 pr-2 font-semibold'>Name</th>"
             f"<th class='pb-1.5 pr-2 font-semibold'>P(pay)</th><th class='pb-1.5 pr-2 font-semibold'>Tier</th>"
             f"<th class='pb-1.5 pr-2 font-semibold'>Exp. value</th><th class='pb-1.5 pr-2 font-semibold'>Phone</th>"
@@ -367,7 +367,7 @@ def events_partial():
                  for r in conn.execute("select ts, actor, tool, status from audit_log"
                                        " order by id desc limit 8").fetchall()]
         items = "".join(f"<li class='flex gap-2 font-mono text-xs text-neutral-600'>"
-                        f"<span class='mt-1.5 h-1 w-1 shrink-0 rounded-full bg-neutral-900'></span>"
+                        f"<span class='mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary-foreground'></span>"
                         f"{esc(line)}</li>"
                         for line in calls + notes)
         return f"<ul class='space-y-1.5'>{items or '<li class=text-neutral-400>quiet</li>'}</ul>"
