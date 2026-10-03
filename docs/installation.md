@@ -14,6 +14,11 @@ cp .env.example .env   # then fill VAPI_API_KEY for real calls
 | `uv run autopay test` | pytest |
 | `uv run autopay help` | full help |
 
+Voice wiring: `agent/vapi_config.json` holds the assistant + 6 server tools
+pointing at `BASE_URL/vapi/tool` — replace `BASE_URL` with the deployed
+origin. Webhooks: `POST /vapi/tool` (in-call dispatch, always 200 with
+result/error), `POST /vapi/events` (end-of-call transcript + guardrail scan).
+
 Seed explicitly: `uv run python -m app.db` (idempotent).
 Override the db path: `DATABASE_URL="sqlite:///data/autopay_voice.db"`.
 

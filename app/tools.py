@@ -50,8 +50,15 @@ def rank_queue(mode="expected_value", conn=None):
             conn.close()
 
 
-def start_call(customer_id, mode="web", vapi_call_id=None, conn=None):
-    """Open a call row with a ranking snapshot; counts as an attempt."""
+def start_call(customer_id, mode="web", vapi_call_id=None, enforce_hours=True, source="", conn=None):
+    """Open a call row with a ranking snapshot; counts as an attempt.
+    Hours gate on by default; sim/tests pass enforce_hours=False.
+    For now calls start from the merchant dashboard only."""
+    from app import agent as agent_rules
+    if source != "dashboard":
+        raise ValueError("calls start from the merchant dashboard only (for now)")
+    if enforce_hours and not agent_rules.calling_allowed():
+        raise ValueError("outside allowed calling hours (09:00–21:00 IST)")
     own = conn is None
     conn = conn or get_conn()
     try:
@@ -158,10 +165,13 @@ def mint_token(conn, length=token_length):
     raise RuntimeError("token space exhausted")
 
 
-def create_payment_link(customer_id, kind="pay_now", channel="console", base_url="",
+def create_payment_link(customer_id, kind="pay_now", channel="console", base_url=None,
                         ttl_minutes=default_ttl_minutes, call_id=None, conn=None):
-    """Mint a single-use expiring link. Number/channel recorded, never the raw token in logs."""
+    """Mint a single-use expiring link. base_url falls back to $BASE_URL
+    (the cloudflared origin); empty means a relative /pay path for local use."""
+    import os
     from datetime import datetime, timedelta, timezone
+    base_url = base_url if base_url else os.environ.get("BASE_URL", "")
     own = conn is None
     conn = conn or get_conn()
     try:
@@ -184,7 +194,7 @@ def create_payment_link(customer_id, kind="pay_now", channel="console", base_url
             conn.close()
 
 
-def send_payment_link(call_id, channel="console", base_url="", conn=None):
+def send_payment_link(call_id, channel="console", base_url=None, conn=None):
     """Voice path: verified calls only, mandate failures get an update-mandate link."""
     own = conn is None
     conn = conn or get_conn()

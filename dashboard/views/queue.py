@@ -42,7 +42,7 @@ def render(conn):
             st.error(str(exc))
             return
         try:
-            started = tools.start_call(pick, mode="web", conn=conn)
+            started = tools.start_call(pick, mode="web", source="dashboard", conn=conn)
         except ValueError as exc:
             st.warning(str(exc))
             return
