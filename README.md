@@ -14,6 +14,9 @@ uv run autopay test         # tests
 
 Open `http://127.0.0.1:8000/pay/<token>` for the customer payment page.
 
+Docs: [installation](docs/installation.md) · [architecture](docs/architecture.md) ·
+[ranking](docs/ranking.md) · [call workflow](docs/call-workflow.md).
+
 ## Notes
 
 - All data in `data/` is synthetic — fake sequential phones (`+91-90000-00001…`),
