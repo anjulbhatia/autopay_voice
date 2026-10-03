@@ -1,0 +1,8 @@
+# Shares the pay page palette: pay primary #e4c5ff tints surfaces,
+# pay foreground #2b0a49 drives text and actions (light buttons fail contrast).
+[theme]
+primaryColor = "#2b0a49"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f5effc"
+textColor = "#2b0a49"
+font = "sans serif"
