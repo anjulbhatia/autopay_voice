@@ -33,10 +33,74 @@ flowchart TB
     page -->|"/pay/result paid/failed"| tools
     tools -->|"open handoff"| human
     human --> console
-    mcp["MCP server\nthin wrapper"] --> tools
+    mcp["MCP server (planned)\nthin wrapper"] --> tools
     console --> db
     page --> db
 ```
+
+## App module map (click a node → source)
+
+```mermaid
+flowchart LR
+    cli["cli.py\nlauncher: serve · test · mcp stub"]
+    api["api.py\npages · partials · webhooks"]
+    dash["dash.py\nconsole view-models (data only)"]
+    tools["tools.py\nall state changes + voice tool impls"]
+    rank["ranking.py\np_pay · tiers · eligibility"]
+    agentm["agent.py\nprompt assembly · budgets · judge"]
+    prov["provider.py\nVapi SDK: assistant · calls · envelopes"]
+    chan["channels.py\nlink message templates + mock send"]
+    dbm["db.py\nschema · seed · sqlite helpers"]
+    models["models.py\nenums + seed validation"]
+    config["config.py\ncaps · hours · TTLs · env"]
+    utils["utils.py\nescape · phone mask · reasons"]
+
+    cli --> api
+    cli --> tools
+    api --> tools
+    api --> dash
+    api --> agentm
+    api --> prov
+    api --> chan
+    api --> dbm
+    dash --> tools
+    dash --> dbm
+    tools --> rank
+    tools --> agentm
+    tools --> chan
+    tools --> dbm
+    rank --> config
+    agentm --> config
+    tools --> config
+    api --> config
+    dash --> config
+    dbm --> models
+    tools --> utils
+    dash --> utils
+    api --> utils
+
+    click cli "https://github.com/anjulbhatia/autopay_voice/blob/master/app/cli.py"
+    click api "https://github.com/anjulbhatia/autopay_voice/blob/master/app/api.py"
+    click dash "https://github.com/anjulbhatia/autopay_voice/blob/master/app/dash.py"
+    click tools "https://github.com/anjulbhatia/autopay_voice/blob/master/app/tools.py"
+    click rank "https://github.com/anjulbhatia/autopay_voice/blob/master/app/ranking.py"
+    click agentm "https://github.com/anjulbhatia/autopay_voice/blob/master/app/agent.py"
+    click prov "https://github.com/anjulbhatia/autopay_voice/blob/master/app/provider.py"
+    click chan "https://github.com/anjulbhatia/autopay_voice/blob/master/app/channels.py"
+    click dbm "https://github.com/anjulbhatia/autopay_voice/blob/master/app/db.py"
+    click models "https://github.com/anjulbhatia/autopay_voice/blob/master/app/models.py"
+    click config "https://github.com/anjulbhatia/autopay_voice/blob/master/app/config.py"
+    click utils "https://github.com/anjulbhatia/autopay_voice/blob/master/app/utils.py"
+```
+
+Reading: `cli` boots (`serve` → api, seed → tools). `api` is the hub —
+it renders pages/partials from `dash` view-models, runs voice webhooks
+through `tools` with `prov` parsing the envelopes, and builds call prompts
+from `agentm`. `tools` owns every write: it scores via `rank`, gates hours
+via `agentm`, sends links via `chan`, persists via `dbm`. `rank`/`agentm`
+read limits from `config`; `dbm` validates seeds against `models`. Voice data
+flow (not an import): `api` feeds `agentm`'s assembled prompt into `prov`'s
+transient assistant, and `prov` parses webhook envelopes for `api`.
 
 
 ## Components
