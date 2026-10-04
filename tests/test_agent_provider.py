@@ -1,6 +1,4 @@
 """agent.py assembly/contracts + provider.py payload/guards (no network)."""
-import httpx
-
 from app import agent, provider
 from app.db import get_conn, init_db
 from app import tools
@@ -43,28 +41,54 @@ def test_provider_guards(monkeypatch):
     except provider.vapi_error:
         pass
     payload = provider.build_assistant("sys", "https://base.test/")
-    assert payload["serverUrl"] == "https://base.test/vapi/tool"
-    assert [t["name"] for t in payload["serverTools"]] == provider.tool_names
+    assert payload["server"]["url"] == "https://base.test/vapi/tool"
+    assert payload["serverMessages"] == ["tool-calls", "end-of-call-report"]
+    assistants_tools = payload["model"]["tools"]
+    assert [t["function"]["name"] for t in assistants_tools] == provider.tool_names
+    assert all(t["type"] == "function" for t in assistants_tools)
+    assert all(t["server"]["url"] == "https://base.test/vapi/tool" for t in assistants_tools)
 
-    calls = {}
+    class fake_calls:
+        def __init__(self):
+            self.kwargs = None
 
-    class fake_response:
-        def raise_for_status(self):
-            pass
-
-        def json(self):
+        def create(self, **kwargs):
+            self.kwargs = kwargs
             return {"id": "call-1", "webCallUrl": "https://vapi.test/c/1"}
 
-    def fake_post(url, headers=None, json=None, timeout=None):
-        calls["url"] = url
-        calls["body"] = json
-        return fake_response()
+    class fake_client:
+        def __init__(self):
+            self.calls = fake_calls()
 
-    monkeypatch.setattr(httpx, "post", fake_post)
-    out = provider.start_web_call("sys", "https://base.test", key="k")
-    assert out["id"] == "call-1" and calls["url"].endswith("/call")
+    web = fake_client()
+    out = provider.start_web_call("sys", "https://base.test", client=web)
+    assert out["id"] == "call-1" and "phone_number_id" not in web.calls.kwargs
+    assert web.calls.kwargs["assistant"]["server"]["url"] == "https://base.test/vapi/tool"
     try:
-        provider.start_phone_call("sys", "https://base.test", "+91-90000-00001")
+        provider.start_phone_call("sys", "https://base.test", "+91-90000-00001", client=fake_client())
         raise AssertionError("should have raised")
     except provider.vapi_error:
         pass
+    phone = fake_client()
+    placed = provider.start_phone_call("sys", "https://base.test", "+91-90000-00001",
+                                       confirm=True, client=phone)
+    assert placed["id"] == "call-1"
+    assert phone.calls.kwargs["customer"] == {"number": "+91-90000-00001"}
+
+
+def test_tool_envelope_helpers():
+    body = {"message": {"type": "tool-calls", "toolCallList": [
+        {"id": "tu-1", "type": "function",
+         "function": {"name": "verify_identity", "arguments": {"answer": "1990"}}},
+        {"id": "tu-2", "type": "function",
+         "function": {"name": "log_outcome", "arguments": '{"result": "failed"}'}},
+    ]}}
+    items = provider.tool_calls_of(body)
+    assert [provider.tool_call_id_of(i) for i in items] == ["tu-1", "tu-2"]
+    assert provider.tool_name_args(items[0]) == ("verify_identity", {"answer": "1990"})
+    assert provider.tool_name_args(items[1]) == ("log_outcome", {"result": "failed"})
+    ok = provider.tool_result("tu-1", {"ok": True})
+    assert ok == {"toolCallId": "tu-1", "result": '{"ok": true}'}
+    err = provider.tool_error("tu-2", "nope")
+    assert err == {"toolCallId": "tu-2", "error": "nope"}
+    assert provider.tool_calls_of({}) == []

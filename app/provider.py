@@ -1,11 +1,66 @@
+"""Vapi voice provider, via the official ``vapi-server-sdk`` (no raw REST).
+
+Shapes verified against docs.vapi.ai (2026-10-04):
+- Client: ``from vapi import Vapi; client = Vapi(token=...)``;
+  ``client.calls.create(...)``. API errors raise ``vapi.core.api_error.ApiError``.
+- Transient assistant inline per call: ``assistant={name, model, server, serverMessages}``.
+  Tools are inline function tools at ``model.tools[]``:
+  ``{type: "function", function: {name, description, parameters}, server: {url}}``.
+  Webhook precedence is tool.server.url -> assistant.server.url, so every
+  tool points at ``BASE_URL/vapi/tool`` and the assistant url is a fallback.
+- Outbound phone: ``phone_number_id`` + ``customer={"number": ...}``.
+  Web call: assistant only, no phone number.
+- Tool webhook: ``message.type == "tool-calls"``,
+  ``message.toolCallList[]`` = ``{id, function: {name, arguments}}``.
+- Tool response: ``{"results": [{"toolCallId": id, "result": "<flat string>"}]}``,
+  HTTP 200 always; per-call failure uses ``"error"`` instead of ``"result"``.
+- End-of-call report: ``message.type == "end-of-call-report"`` with
+  ``endedReason`` and the transcript at ``artifact.transcript``.
+
+``app/agent.py`` stays framework-agnostic (prompt text, budgets, judge);
+this module is the first provider that consumes it.
+"""
+import json
 import os
-
-import httpx
-
-api_base = "https://api.vapi.ai"
 
 tool_names = ["verify_identity", "get_failed_payment", "send_payment_link",
               "schedule_retry", "request_human_handoff", "log_outcome"]
+
+#: Server webhook events we subscribe to on every call.
+server_messages = ["tool-calls", "end-of-call-report"]
+
+tool_specs = [
+    {"name": "verify_identity",
+     "description": "Check the caller's security answer. Call first, max twice.",
+     "parameters": {"type": "object",
+                    "properties": {"answer": {"type": "string"}},
+                    "required": ["answer"]}},
+    {"name": "get_failed_payment",
+     "description": "Failed payment details. Refuses until verify_identity succeeds.",
+     "parameters": {"type": "object", "properties": {}}},
+    {"name": "send_payment_link",
+     "description": "Single-use expiring link to the number on file. Verified callers only.",
+     "parameters": {"type": "object",
+                    "properties": {"channel": {"type": "string",
+                                               "enum": ["console", "whatsapp", "sms"]}}}},
+    {"name": "schedule_retry",
+     "description": "Reminder on a customer-accepted date.",
+     "parameters": {"type": "object",
+                    "properties": {"when": {"type": "string"}},
+                    "required": ["when"]}},
+    {"name": "request_human_handoff",
+     "description": "Queue a human takeover with a reason.",
+     "parameters": {"type": "object",
+                    "properties": {"reason": {"type": "string"},
+                                   "notes": {"type": "string"}},
+                    "required": ["reason"]}},
+    {"name": "log_outcome",
+     "description": "Close the call with an outcome. Always call this last.",
+     "parameters": {"type": "object",
+                    "properties": {"result": {"type": "string"},
+                                   "notes": {"type": "string"}},
+                    "required": ["result"]}},
+]
 
 
 class vapi_error(Exception):
@@ -29,26 +84,57 @@ def vapi_phone_id():
     return os.environ.get("VAPI_PHONE_NUMBER_ID", "").strip()
 
 
+def server_url(base_url):
+    """Single webhook origin for tool calls: BaseURL/vapi/tool."""
+    return base_url.rstrip("/") + "/vapi/tool"
+
+
 def build_assistant(system_prompt, base_url, model="gpt-4o-mini"):
-    """Assistant payload: prompt assembled by app/agent.py, our six tools
-    as server tools hitting BaseURL/vapi/tool."""
-    server_url = base_url.rstrip("/") + "/vapi/tool"
+    """Transient assistant payload: prompt assembled by app/agent.py, our six
+    function tools with per-tool server urls. Passed as ``assistant=`` to
+    ``client.calls.create`` — never stored server-side."""
+    url = server_url(base_url)
     return {
         "name": "autopay-recovery (synthetic demo)",
-        "serverUrl": server_url,
+        "server": {"url": url},
+        "serverMessages": list(server_messages),
         "model": {"provider": "openai", "model": model,
-                  "messages": [{"role": "system", "content": system_prompt}]},
-        "serverTools": [{"type": "server", "name": name} for name in tool_names],
+                  "messages": [{"role": "system", "content": system_prompt}],
+                  "tools": [{"type": "function",
+                             "function": {"name": spec["name"],
+                                          "description": spec["description"],
+                                          "parameters": spec["parameters"]},
+                             "server": {"url": url}} for spec in tool_specs]},
     }
 
 
-def start_web_call(system_prompt, base_url, key=None):
-    """Start a browser/client call. Returns the provider call object."""
-    response = httpx.post(f"{api_base}/call", headers={"Authorization": f"Bearer {key or api_key()}"},
-                          json={"type": "webCall", "assistant": build_assistant(system_prompt, base_url)},
-                          timeout=30)
-    response.raise_for_status()
-    return response.json()
+def _sdk(key=None):
+    from vapi import Vapi
+    return Vapi(token=key or api_key())
+
+
+def _plain(call):
+    """SDK Call model -> plain dict. Passes through dicts (tests, fakes)."""
+    if isinstance(call, dict):
+        return call
+    dump = getattr(call, "model_dump", None)
+    if callable(dump):
+        return dump()
+    return dict(call)
+
+
+def _sdk_error(exc):
+    raise vapi_error(f"vapi call failed: {exc}")
+
+
+def start_web_call(system_prompt, base_url, key=None, client=None):
+    """Start a browser/client call. Returns the provider call as a plain dict."""
+    sdk = client if client is not None else _sdk(key)
+    try:
+        call = sdk.calls.create(assistant=build_assistant(system_prompt, base_url))
+    except Exception as exc:
+        _sdk_error(exc)
+    return _plain(call)
 
 
 def test_destination(explicit=""):
@@ -61,7 +147,7 @@ def test_destination(explicit=""):
 
 
 def start_phone_call(system_prompt, base_url, to_number=None, key=None, confirm=False,
-                     from_number=None):
+                     from_number=None, client=None):
     """Outbound phone. Refuses unless confirm=True with a destination —
     only call numbers you control or have permission for.
 
@@ -72,37 +158,86 @@ def start_phone_call(system_prompt, base_url, to_number=None, key=None, confirm=
     if not confirm or not dest:
         raise vapi_error("phone calls need confirm=True and a destination you control "
                          "(TEST_CALL_TO_NUMBER or explicit to_number)")
-    payload = {"type": "outboundPhoneCall",
-               "customer": {"number": dest},
-               "assistant": build_assistant(system_prompt, base_url)}
+    kwargs = {"assistant": build_assistant(system_prompt, base_url),
+              "customer": {"number": dest}}
     phone_id = vapi_phone_id()
     caller = from_number or vapi_caller_number()
     if phone_id:
-        payload["phoneNumberId"] = phone_id
+        kwargs["phone_number_id"] = phone_id
     elif caller:
-        payload["phoneNumber"] = caller
-    response = httpx.post(f"{api_base}/call", headers={"Authorization": f"Bearer {key or api_key()}"},
-                          json=payload, timeout=30)
-    response.raise_for_status()
-    return response.json()
+        kwargs["phone_number"] = caller
+    sdk = client if client is not None else _sdk(key)
+    try:
+        call = sdk.calls.create(**kwargs)
+    except Exception as exc:
+        _sdk_error(exc)
+    return _plain(call)
 
 
-def parse_tool_call(body):
-    """Tolerant tool-call parser. Canonical shape: message.toolCalls[0]
-    {name/function.name, arguments}. Confirm against current Vapi docs."""
+def tool_calls_of(body):
+    """All tool-call items in a webhook body. Canonical per current docs:
+    ``message.toolCallList[]``; legacy ``toolCalls``/``tool_calls`` shapes
+    still accepted so older events keep working."""
     message = body.get("message", body) if isinstance(body, dict) else {}
-    for key in ("toolCalls", "tool_calls"):
+    for key in ("toolCallList", "toolCalls", "tool_calls"):
         found = message.get(key)
         if found:
-            return found[0]
+            return list(found) if isinstance(found, list) else [found]
     for key in ("toolCall", "functionCall", "function_call"):
         single = message.get(key)
         if single:
-            return single
-    return {}
+            return [single]
+    return []
+
+
+def parse_tool_call(body):
+    """First tool-call item (kept for callers that handle one call)."""
+    items = tool_calls_of(body)
+    return items[0] if items else {}
+
+
+def tool_call_id_of(item):
+    """Provider tool-call id -> echoed back as ``toolCallId`` in results."""
+    return (item or {}).get("id", "")
+
+
+def tool_name_args(item):
+    """(name, args) from a tool-call item. Arguments may arrive as object
+    or JSON string; unparseable strings become {} (never raise mid-call)."""
+    item = item or {}
+    fn = item.get("function") or {}
+    name = item.get("name") or fn.get("name", "")
+    args = item.get("arguments") or fn.get("arguments") or {}
+    if isinstance(args, str):
+        try:
+            args = json.loads(args) if args else {}
+        except ValueError:
+            args = {}
+    return name, args
+
+
+def tool_result(call_id, payload):
+    """Success envelope. ``result`` must be a flat string per docs, so dicts
+    are JSON-serialized (the model reads the JSON back)."""
+    text = payload if isinstance(payload, str) else json.dumps(payload)
+    return {"toolCallId": call_id, "result": text}
+
+
+def tool_error(call_id, message):
+    """Failure envelope. Still HTTP 200 — Vapi speaks the error message
+    instead of reporting 'no result returned'."""
+    return {"toolCallId": call_id, "error": str(message)}
 
 
 def call_id_of(body):
     """Provider call id -> our internal call row (bound server-side)."""
     message = body.get("message", {}) if isinstance(body.get("message"), dict) else {}
     return (body.get("call", {}) or {}).get("id") or body.get("callId") or (message.get("call", {}) or {}).get("id")
+
+
+def report_transcript(message):
+    """Transcript from an end-of-call-report. Current docs put it at
+    ``artifact.transcript``; older payloads carry top-level fields."""
+    artifact = message.get("artifact") or {}
+    return (artifact.get("transcript") or message.get("transcript")
+            or message.get("summary") or "")

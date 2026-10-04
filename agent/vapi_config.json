@@ -1,6 +1,10 @@
 {
   "assistant": {
     "name": "autopay-recovery",
+    "server": {
+      "url": "BASE_URL/vapi/tool"
+    },
+    "serverMessages": ["tool-calls", "end-of-call-report"],
     "model": {
       "provider": "openai",
       "model": "gpt-4o-mini",
@@ -9,72 +13,89 @@
           "role": "system",
           "content": "ASSEMBLED_AT_CALL_TIME by app/agent.py from agent/prompt.md + policies.md + guardrails.md + tier + customer context. See app/agent.py assemble_prompt."
         }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "verify_identity",
+            "description": "Check the caller's security answer. Call first, max twice.",
+            "parameters": {
+              "type": "object",
+              "properties": { "answer": { "type": "string" } },
+              "required": ["answer"]
+            }
+          },
+          "server": { "url": "BASE_URL/vapi/tool" }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "get_failed_payment",
+            "description": "Failed payment details. Refuses until verify_identity succeeds.",
+            "parameters": { "type": "object", "properties": {} }
+          },
+          "server": { "url": "BASE_URL/vapi/tool" }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "send_payment_link",
+            "description": "Single-use expiring link to the number on file. Verified callers only.",
+            "parameters": {
+              "type": "object",
+              "properties": { "channel": { "type": "string", "enum": ["console", "whatsapp", "sms"] } }
+            }
+          },
+          "server": { "url": "BASE_URL/vapi/tool" }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "schedule_retry",
+            "description": "Reminder on a customer-accepted date.",
+            "parameters": {
+              "type": "object",
+              "properties": { "when": { "type": "string" } },
+              "required": ["when"]
+            }
+          },
+          "server": { "url": "BASE_URL/vapi/tool" }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "request_human_handoff",
+            "description": "Queue a human takeover with a reason.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "reason": { "type": "string" },
+                "notes": { "type": "string" }
+              },
+              "required": ["reason"]
+            }
+          },
+          "server": { "url": "BASE_URL/vapi/tool" }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "log_outcome",
+            "description": "Close the call with an outcome. Always call this last.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "result": { "type": "string" },
+                "notes": { "type": "string" }
+              },
+              "required": ["result"]
+            }
+          },
+          "server": { "url": "BASE_URL/vapi/tool" }
+        }
       ]
-    },
-    "serverUrl": "BASE_URL/vapi/tool",
-    "serverTools": [
-      {
-        "type": "server",
-        "name": "verify_identity",
-        "description": "Check the caller's security answer. Call first, max twice.",
-        "parameters": {
-          "type": "object",
-          "properties": { "answer": { "type": "string" } },
-          "required": ["answer"]
-        }
-      },
-      {
-        "type": "server",
-        "name": "get_failed_payment",
-        "description": "Failed payment details. Refuses until verify_identity succeeds.",
-        "parameters": { "type": "object", "properties": {} }
-      },
-      {
-        "type": "server",
-        "name": "send_payment_link",
-        "description": "Single-use expiring link to the number on file. Verified callers only.",
-        "parameters": {
-          "type": "object",
-          "properties": { "channel": { "type": "string", "enum": ["console", "whatsapp", "sms"] } }
-        }
-      },
-      {
-        "type": "server",
-        "name": "schedule_retry",
-        "description": "Reminder on a customer-accepted date.",
-        "parameters": {
-          "type": "object",
-          "properties": { "when": { "type": "string" } },
-          "required": ["when"]
-        }
-      },
-      {
-        "type": "server",
-        "name": "request_human_handoff",
-        "description": "Queue a human takeover with a reason.",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "reason": { "type": "string" },
-            "notes": { "type": "string" }
-          },
-          "required": ["reason"]
-        }
-      },
-      {
-        "type": "server",
-        "name": "log_outcome",
-        "description": "Close the call with an outcome. Always call this last.",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "result": { "type": "string" },
-            "notes": { "type": "string" }
-          },
-          "required": ["result"]
-        }
-      }
-    ]
+    }
   },
-  "notes": "Replace BASE_URL with the deployed origin (e.g. the cloudflared URL). System prompt is assembled per call, never pasted here."
+  "notes": "Reference shape for dashboard/CLI import (function tools per docs.vapi.ai/tools/custom-tools, transient assistant per call). Live calls build this in code via app/provider.py build_assistant (vapi-server-sdk) — replace BASE_URL with the deployed origin (e.g. the cloudflared URL). System prompt is assembled per call, never pasted here."
 }

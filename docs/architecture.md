@@ -50,7 +50,8 @@ flowchart TB
   customer id from the model.
 - `app/agent.py` — prompt assembly + call decisions (tier budgets, tone,
   verification, anti-hallucination).
-- `app/provider.py` — Vapi REST wrapper (web-call default, phone opt-in).
+- `app/provider.py` — Vapi wrapper on `vapi-server-sdk` (transient assistant,
+  function tools, web/phone start, webhook parsing). See `voice-provider.md`.
 - `app/api.py` — pages (`/console`, `/pay/{token}`), HTMX partials
   (`/partials/*`), Vapi webhooks (`/vapi/tool`, `/vapi/events`).
 - `app/dash.py` — console view-models, data only (no HTML).

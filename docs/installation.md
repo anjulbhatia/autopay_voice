@@ -37,10 +37,13 @@ there is no auto-dialer.
 - **Observe** — call records (click for transcript + linked handoff +
   call audit), handoffs, audit log; each with its own filter.
 
-Voice wiring: `agent/vapi_config.json` holds the assistant + 6 server tools
-pointing at `BASE_URL/vapi/tool` — replace `BASE_URL` with the deployed
-origin. Webhooks: `POST /vapi/tool` (in-call dispatch, always 200 with
-result/error), `POST /vapi/events` (end-of-call transcript + guardrail scan).
+Voice wiring: transient per-call assistant built by `app/provider.py`
+(`vapi-server-sdk`, 6 inline function tools → `BASE_URL/vapi/tool`) from the
+`app/agent.py` prompt — reference shape in `agent/vapi_config.json`, replace
+`BASE_URL` with the deployed origin. Webhooks: `POST /vapi/tool` (in-call
+dispatch, always 200 with a `results` array) · `POST /vapi/events`
+(end-of-call transcript + guardrail scan). Full contract:
+[voice provider](voice-provider.md).
 
 ## Public payment links (demo)
 

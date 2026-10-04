@@ -95,42 +95,51 @@ async def pay_result(body: pay_result_in):
 @app.post("/vapi/tool")
 async def vapi_tool(request: Request):
     """In-call tool dispatch. Binds provider call id -> internal call;
-    the model never supplies a customer id. Always 200 with result/error
-    so the voice loop keeps talking instead of dropping."""
+    the model never supplies a customer id. Responds in Vapi's results
+    envelope (``{"results": [{"toolCallId", "result"|"error"}]}``), always
+    HTTP 200, so the voice loop keeps talking instead of dropping."""
     body = await request.json()
-    raw = provider.parse_tool_call(body)
-    name = raw.get("name") or (raw.get("function", {}) or {}).get("name", "")
-    args = raw.get("arguments") or raw.get("args") or raw.get("parameters") or {}
-    if isinstance(args, str):
-        try:
-            args = json.loads(args) if args else {}
-        except ValueError:
-            args = {}
+    items = provider.tool_calls_of(body)
+    if not items:
+        return {"results": []}
     conn = get_conn()
     try:
         vapi_id = provider.call_id_of(body)
         row = conn.execute("select call_id from calls where vapi_call_id = ?", (vapi_id,)).fetchone() \
             if vapi_id else None
-        if row is None:
-            return {"error": "unknown call; only the generic message may be spoken"}
-        call_id = row["call_id"]
-        try:
-            if name == "verify_identity":
-                return {"result": tools.verify_identity(call_id, args.get("answer"), conn)}
-            if name == "get_failed_payment":
-                return {"result": tools.get_failed_payment(call_id, conn)}
-            if name == "send_payment_link":
-                return {"result": tools.send_payment_link(call_id, args.get("channel", "console"), base_url(), conn)}
-            if name == "schedule_retry":
-                return {"result": tools.schedule_retry(call_id, args.get("when"), conn)}
-            if name == "request_human_handoff":
-                return {"result": tools.request_human_handoff(call_id, args.get("reason", "asked_for_human"),
-                                                              args.get("notes", ""), conn)}
-            if name == "log_outcome":
-                return {"result": tools.log_outcome(call_id, args.get("result", "failed"), args.get("notes", ""), conn)}
-        except ValueError as exc:
-            return {"error": str(exc)}
-        return {"error": f"unknown tool {name!r}"}
+        results = []
+        for item in items:
+            tid = provider.tool_call_id_of(item)
+            name, args = provider.tool_name_args(item)
+            if row is None:
+                results.append(provider.tool_error(
+                    tid, "unknown call; only the generic message may be spoken"))
+                continue
+            call_id = row["call_id"]
+            try:
+                if name == "verify_identity":
+                    payload = tools.verify_identity(call_id, args.get("answer"), conn)
+                elif name == "get_failed_payment":
+                    payload = tools.get_failed_payment(call_id, conn)
+                elif name == "send_payment_link":
+                    payload = tools.send_payment_link(call_id, args.get("channel", "console"),
+                                                      base_url(), conn)
+                elif name == "schedule_retry":
+                    payload = tools.schedule_retry(call_id, args.get("when"), conn)
+                elif name == "request_human_handoff":
+                    payload = tools.request_human_handoff(call_id, args.get("reason", "asked_for_human"),
+                                                          args.get("notes", ""), conn)
+                elif name == "log_outcome":
+                    payload = tools.log_outcome(call_id, args.get("result", "failed"),
+                                                args.get("notes", ""), conn)
+                else:
+                    results.append(provider.tool_error(tid, f"unknown tool {name!r}"))
+                    continue
+            except ValueError as exc:
+                results.append(provider.tool_error(tid, str(exc)))
+                continue
+            results.append(provider.tool_result(tid, payload))
+        return {"results": results}
     finally:
         conn.close()
 
@@ -150,10 +159,11 @@ async def vapi_events(request: Request):
                            (vapi_id,)).fetchone() if vapi_id else None
         if row is None:
             return {"ok": False, "error": "unknown call"}
-        transcript = message.get("transcript") or message.get("summary") or ""
+        transcript = provider.report_transcript(message)
         verdict = agent_rules.judge_scan(transcript)
         ended = (message.get("endedReason") or "").lower()
-        if "no-answer" in ended or "did-not-answer" in ended:
+        if "no-answer" in ended or "did-not-answer" in ended or "did_not_answer" in ended \
+                or "voicemail" in ended:
             mapped = "no_answer"
         elif row["outcome"] is None:
             mapped = "failed"  # never leave a finished call open

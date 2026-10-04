@@ -49,7 +49,8 @@ Vapi (/vapi/tool, /vapi/events) ────┘  │  shared logic (tools.py, ra
 
 Full diagram and component table: [architecture](docs/architecture.md).
 Docs: [installation](docs/installation.md) · [architecture](docs/architecture.md) ·
-[ranking](docs/ranking.md) · [call workflow](docs/call-workflow.md).
+[ranking](docs/ranking.md) · [call workflow](docs/call-workflow.md) ·
+[voice provider](docs/voice-provider.md).
 
 ## Notes
 

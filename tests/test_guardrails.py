@@ -1,5 +1,6 @@
 """Guardrails enforced in code: binding, gate, hours, caps, opt-out, judge, webhooks."""
 import hashlib
+import json
 from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
@@ -103,19 +104,32 @@ def test_vapi_webhooks(tmp_path, monkeypatch):
 
     def tool_body(name, args):
         return {"call": {"id": "vapi-1"},
-                "message": {"toolCalls": [{"name": name, "arguments": args}]}}
+                "message": {"type": "tool-calls", "toolCallList": [
+                    {"id": "tu-1", "type": "function",
+                     "function": {"name": name, "arguments": args}}]}}
+
+    def dispatched(resp):
+        assert resp.status_code == 200
+        results = resp.json()["results"]
+        assert len(results) == 1 and results[0]["toolCallId"] == "tu-1"
+        item = results[0]
+        return json.loads(item["result"]) if "result" in item else item
 
     assert client.post("/vapi/tool", json={"call": {"id": "nope"},
-                                           "message": {"toolCalls": [{"name": "get_failed_payment",
-                                                                      "arguments": {}}]}}).json()["error"]
-    gated = client.post("/vapi/tool", json=tool_body("get_failed_payment", {})).json()
-    assert gated["result"]["refused"] is True
-    verified = client.post("/vapi/tool", json=tool_body("verify_identity", {"answer": "1111"})).json()
-    assert verified["result"]["ok"] is True
-    assert client.post("/vapi/tool", json=tool_body("nope_tool", {})).json()["error"]
+                                           "message": {"type": "tool-calls", "toolCallList": [
+                                               {"id": "tu-9", "type": "function",
+                                                "function": {"name": "get_failed_payment",
+                                                             "arguments": {}}}]}}
+                       ).json()["results"][0]["error"]
+    gated = dispatched(client.post("/vapi/tool", json=tool_body("get_failed_payment", {})))
+    assert gated["refused"] is True
+    verified = dispatched(client.post("/vapi/tool", json=tool_body("verify_identity", {"answer": "1111"})))
+    assert verified["ok"] is True
+    assert dispatched(client.post("/vapi/tool", json=tool_body("nope_tool", {})))["error"]
 
     evil = {"call": {"id": "vapi-1"}, "message": {"type": "end-of-call-report",
-            "transcript": "Pay or face court. Give your OTP now.", "endedReason": "customer-ended-call"}}
+            "artifact": {"transcript": "Pay or face court. Give your OTP now."},
+            "endedReason": "customer-ended-call"}}
     events = client.post("/vapi/events", json=evil).json()
     assert events["ok"] is True and events["judge"]["passed"] is False
     conn = get_conn()
