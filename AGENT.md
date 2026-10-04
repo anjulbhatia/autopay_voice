@@ -24,7 +24,7 @@ The deliverable is a repository with setup and run instructions, a working end-t
 5. **Prompt assembly.** `agent/prompt.md` (persona and tiers), `agent/policies.md`, `agent/guardrails.md` are combined per call.
 6. **Payment link flow.** If the customer agrees to pay, send a single-use expiring link through a channel adapter (mock by default).
 7. **Human handoff queue** for calls that need a person.
-8. **Merchant dashboard** (Streamlit) and a **customer redressal page** (plain HTML from FastAPI).
+8. **Merchant console** (HTMX, served from FastAPI) and a **customer payment page** (plain HTML from FastAPI).
 9. **Tests and evals**, including a text-based caller simulator with adversarial personas.
 10. **MCP server** as a thin, read-mostly wrapper over the same functions. Build this last.
 
@@ -44,31 +44,35 @@ autopay_voice/
   AGENT.md
   README.md
   .env.example
-  Makefile
-  pyproject.toml            # managed with uv
+  pyproject.toml            # managed with uv (`autopay` entrypoint -> app.cli:main)
   data/customers.json       # 10 fictional records
   app/
-    provider.py             # provider (defaults to Vapi)
-    main.py                 # FastAPI: /campaign, /vapi/tool, /vapi/events, /pay/{token}
-    db.py                   # schema + idempotent seed
-    ranking.py              # scoring, eligibility, tiers, reasons
-    tools.py                # functions the voice agent can call
+    agent.py                # prompt assembly + call budgets + guardrail judge
+    api.py                  # FastAPI: pages, HTMX partials, /vapi/tool, /vapi/events, /pay/{token}
     channels.py             # whatsapp | sms | console adapters (console is default)
-    prompts.py              # renders prompt.md + policies.md + guardrails.md + customer context
-    mcp_server.py           # FastMCP wrapper over tools/queries
+    cli.py                  # `autopay` launcher: serve | test | mcp (stub) | help
+    config.py               # env settings + business limits (caps, hours, TTLs)
+    dash.py                 # HTMX HTML partials (phones masked)
+    db.py                   # schema + idempotent seed
+    models.py               # Literal enums + seed validation
+    provider.py             # Vapi REST wrapper (web-call default, phone opt-in)
+    ranking.py              # scoring, eligibility, tiers, reasons
+    tools.py                # functions the voice agent can call (+ shared campaign logic)
+    utils.py                # html escape, phone mask, reasons parse
   agent/
     prompt.md               # persona, tone, tier blocks
     policies.md             # what the agent may and may not do
     guardrails.md           # privacy, safety, refusal rules
     vapi_config.json        # assistant and tool definitions
-  dashboard/app.py          # Streamlit merchant UI
-  web/pay.html              # customer-facing page opened from the link
-  sim/run_sim.py            # text-based caller simulator
-  evals/                    # persona scenarios, judge, metrics
+  web/
+    console.html + assets/console.js                  # merchant console shell
+    pay.html + assets/app.js + assets/validations.js  # customer payment page
+  scripts/
+    generate_customers.py   # synthetic seed generator
   tests/
 ```
 
-SQLite tables: `customers`, `calls`, `messages`, `outcomes`, `handoffs`, `audit_log`.
+SQLite tables: `customers`, `calls`, `payment_links`, `handoffs`, `audit_log`.
 
 ## 4. Main loop
 
@@ -123,7 +127,7 @@ Thin wrapper, no duplicated logic. Read-only tools: `get_ranked_queue`, `get_cam
 - **Unit tests:** ranking eligibility and tiers, call-to-customer binding, verification gate (link refused when unverified), calling-hour and attempt caps, opt-out.
 - **Simulator personas:** cooperative, confused, angry, constantly interrupting, Hinglish speaker, asks "are you a bot?", asks about another customer, claims to be a relative, attempts prompt injection, wrong number.
 - **Metrics:** recovery rate, correct handoffs, guardrail violations (target: zero), average call length per tier. Compare against a naive baseline (blind retry, no personalization). State clearly that results are on synthetic data.
-- `make test` and `make simulate` must pass or run offline without a real call.
+- `uv run autopay test` must pass offline without a real call. Simulator (`sim/`) plus `simulate`/`demo` commands are planned, not built yet.
 
 ## 10. Conventions
 
@@ -134,16 +138,15 @@ Thin wrapper, no duplicated logic. Read-only tools: `get_ranked_queue`, `get_cam
 - Vapi and Razorpay details change. **Check their current docs** before relying on any API shape, pricing, or telephony rule rather than assuming. Vapi's free numbers have been reported as US-only, so start with web-call mode and treat a real phone call as optional.
 - Commit small, with clear messages.
 
-## 11. Commands (create these in the Makefile)
+## 11. Commands (`uv run autopay` — no Makefile)
 
 ```
-make setup      # uv sync, copy .env.example to .env if missing
-make seed       # load data/customers.json into SQLite
-make serve      # run FastAPI
-make dashboard  # run Streamlit
-make test       # pytest
-make simulate   # run the persona simulator and print a scoreboard
-make demo       # seed, simulate, print summary
+uv sync                 # install deps
+uv run autopay          # seed db if missing, serve api + pay page + merchant console on :8000
+uv run autopay test     # pytest
+uv run autopay mcp      # stub: prints planned-last notice (server not built yet)
+uv run autopay help     # full help
+uv run python -m app.db # seed explicitly (idempotent)
 ```
 
 ## 12. Suggested order of work
@@ -151,15 +154,15 @@ make demo       # seed, simulate, print summary
 1. `db.py`, seed, `ranking.py` and its tests.
 2. `tools.py` with the verification gate and its tests.
 3. FastAPI webhooks and Vapi wiring in web-call mode.
-4. `prompt.md`, `policies.md`, `guardrails.md`, and `prompts.py` rendering.
-5. Simulator and evals.
-6. Streamlit dashboard and `web/pay.html`.
-7. MCP server.
+4. `prompt.md`, `policies.md`, `guardrails.md`, and `agent.py` rendering.
+5. `web/pay.html` + HTMX merchant console (`web/console.html`, `app/dash.py`).
+6. Simulator and evals (planned, not built yet).
+7. MCP server (planned last).
 8. README: setup, run steps, assumptions, limitations, and what to harden for production.
 
 ## 13. Definition of done
 
-- A reviewer can clone, run `make setup && make demo`, and see the ranked queue, simulated outcomes, and a scoreboard without any credentials.
+- A reviewer can clone, run `uv sync` then `uv run autopay`, and see the ranked queue, live-call rail, links, handoffs, and audit in the console without any credentials.
 - With a Vapi key, a web call completes end to end and the outcome appears in the dashboard.
 - All guardrail tests pass. No real data or credentials exist in the repo.
 - The README lists assumptions, limitations (synthetic data, mock messaging, single language, no real consent or DND registry), and the production hardening steps.
