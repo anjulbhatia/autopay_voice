@@ -1,1 +1,9 @@
-<ul class='space-y-1.5'>{% for line in items %}<li class='flex gap-2 font-mono text-xs text-neutral-600'><span class='mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary-foreground'></span>{{ line }}</li>{% else %}<li class=text-neutral-400>quiet</li>{% endfor %}</ul>
+<ul class='space-y-1.5'>
+  {% for line in items %}
+  <li class='flex gap-2 font-mono text-xs text-neutral-600'>
+    <span class='mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary-foreground'></span>{{ line }}
+  </li>
+  {% else %}
+  <li class=text-neutral-400>quiet</li>
+  {% endfor %}
+</ul>

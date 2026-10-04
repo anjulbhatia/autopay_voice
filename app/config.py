@@ -1,8 +1,4 @@
-"""Single home for env settings + business limits.
-
-Runtime enum tuples derive from app.models Literals (typing.get_args), so
-models.py stays the only place that lists allowed values.
-"""
+"""Env settings + business limits. Allowed values derive from app.models."""
 import os
 from typing import get_args
 

@@ -1,25 +1,4 @@
-"""Vapi voice provider, via the official ``vapi-server-sdk`` (no raw REST).
-
-Shapes verified against docs.vapi.ai (2026-10-04):
-- Client: ``from vapi import Vapi; client = Vapi(token=...)``;
-  ``client.calls.create(...)``. API errors raise ``vapi.core.api_error.ApiError``.
-- Transient assistant inline per call: ``assistant={name, model, server, serverMessages}``.
-  Tools are inline function tools at ``model.tools[]``:
-  ``{type: "function", function: {name, description, parameters}, server: {url}}``.
-  Webhook precedence is tool.server.url -> assistant.server.url, so every
-  tool points at ``BASE_URL/vapi/tool`` and the assistant url is a fallback.
-- Outbound phone: ``phone_number_id`` + ``customer={"number": ...}``.
-  Web call: assistant only, no phone number.
-- Tool webhook: ``message.type == "tool-calls"``,
-  ``message.toolCallList[]`` = ``{id, function: {name, arguments}}``.
-- Tool response: ``{"results": [{"toolCallId": id, "result": "<flat string>"}]}``,
-  HTTP 200 always; per-call failure uses ``"error"`` instead of ``"result"``.
-- End-of-call report: ``message.type == "end-of-call-report"`` with
-  ``endedReason`` and the transcript at ``artifact.transcript``.
-
-``app/agent.py`` stays framework-agnostic (prompt text, budgets, judge);
-this module is the first provider that consumes it.
-"""
+"""Vapi voice provider on ``vapi-server-sdk``. Contract: docs/voice-provider.md."""
 import json
 import os
 

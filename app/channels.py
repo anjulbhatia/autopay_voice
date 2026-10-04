@@ -1,7 +1,4 @@
-"""Channel adapters. whatsapp/sms/inapp/razorpay_notify are message templates
-with a mock send (real delivery needs business accounts, templates, consent).
-`to_label` must already be masked — raw numbers never reach logs here.
-"""
+"""Link templates + mock send. `to_label` must already be masked."""
 
 templates = {
     "whatsapp": ("Hi {name}, your autopay of {amount} failed. "

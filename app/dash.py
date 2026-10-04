@@ -1,9 +1,4 @@
-"""Console view-models. Data only — no HTML here.
-
-Markup lives in web/partials/*.html (Jinja templates, swapped in by htmx).
-Endpoints in app/api.py query these helpers and render the matching template.
-Jinja autoescape handles HTML-escaping; values arrive unescaped.
-"""
+"""Console view-models, data only. Markup: web/partials/*.html."""
 import json as jsonlib
 
 from app import tools

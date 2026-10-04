@@ -186,7 +186,11 @@
       var on = sec.getAttribute("data-section") === name;
       sec.classList.toggle("hidden", !on);
       if (sec.getAttribute("data-section") === "customers") sec.classList.toggle("flex", on);
-      if (sec.getAttribute("data-section") === "observability") sec.classList.toggle("flex", on);
+      if (sec.getAttribute("data-section") === "observability") {
+        sec.classList.toggle("flex", on);
+        sec.classList.toggle("sm:grid", on);
+        sec.classList.toggle("sm:grid-cols-2", on);
+      }
       if (on && hasAnime()) {
         window.anime.animate(sec, { opacity: [0, 1], translateY: [12, 0], duration: 280, easing: "easeOutCubic" });
       }

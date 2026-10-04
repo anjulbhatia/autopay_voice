@@ -1,1 +1,21 @@
-<table class='w-full text-left'><tbody>{% for r in rows %}<tr class='border-t border-neutral-100 font-mono text-xs'><td class='py-1.5 pr-2 text-neutral-400'>{{ r.time }}</td><td class='py-1.5 pr-2'><span class='rounded bg-neutral-100 px-1.5 py-0.5'>{{ r.actor }}</span> <span class='font-semibold'>{{ r.tool }}</span>{% if r.call_id %} · #{{ r.call_id }}{% endif %}</td><td class='py-1.5 pr-2 text-neutral-500 break-all'>{{ r.args }}</td><td class='py-1.5 text-right'>{{ r.status }}</td></tr>{% else %}<tr><td class='py-8 text-center text-sm text-neutral-400'><span class='mx-auto mb-1 block h-8 w-8 rounded-full bg-neutral-100'></span>no audit entries yet</td></tr>{% endfor %}</tbody></table>
+<table class='w-full text-left'>
+  <tbody>
+    {% for r in rows %}
+    <tr class='border-t border-neutral-100 font-mono text-xs'>
+      <td class='py-1.5 pr-2 text-neutral-400'>{{ r.time }}</td>
+      <td class='py-1.5 pr-2'>
+        <span class='rounded bg-neutral-100 px-1.5 py-0.5'>{{ r.actor }}</span>
+        <span class='font-semibold'>{{ r.tool }}</span>{% if r.call_id %} · #{{ r.call_id }}{% endif %}
+      </td>
+      <td class='py-1.5 pr-2 text-neutral-500 break-all'>{{ r.args }}</td>
+      <td class='py-1.5 text-right'>{{ r.status }}</td>
+    </tr>
+    {% else %}
+    <tr>
+      <td class='py-8 text-center text-sm text-neutral-400'>
+        <span class='mx-auto mb-1 block h-8 w-8 rounded-full bg-neutral-100'></span>no audit entries yet
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

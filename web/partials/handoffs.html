@@ -1,1 +1,37 @@
-<table class='w-full text-left text-sm'><thead class='sticky top-0 bg-white'><tr class='text-neutral-500'><th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Handoff ID'>ID</th><th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Customer ID'>Customer</th><th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Why a human is needed'>Reason</th><th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Open or resolved'>Status</th><th class='pb-1.5'></th></tr></thead><tbody>{% for r in rows %}<tr class='border-t border-neutral-100 transition-colors hover:bg-[#faf8fd] cursor-pointer' hx-get='/partials/handoffs/{{ r.handoff_id }}' hx-target='#modal-body' hx-swap='innerHTML' onclick='openModal()'><td class='py-2 pr-2 font-mono text-[12px] font-medium'>#{{ r.handoff_id }}</td><td class='py-2 pr-2 font-mono text-xs'>{{ r.customer_id }}</td><td class='py-2 pr-2 text-[13px]'>{{ r.reason }}</td><td class='py-2 pr-2'><span class='rounded-full px-2 py-0.5 text-[11px] font-semibold {{ 'bg-amber-100 text-amber-800' if r.status == 'open' else 'bg-neutral-200 text-neutral-500' }}'>{{ r.status_label }}</span></td><td class='py-2 text-right whitespace-nowrap' onclick='event.stopPropagation()'><button hx-post='/partials/handoffs/resolve' hx-vals='{{ r.vals_json|safe }}' hx-target='#console-msg' hx-swap='innerHTML' class='rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 transition-colors inline-flex items-center gap-1' title='Resolve handoff'>Resolve</button></td></tr>{% else %}<tr><td class='py-8 text-center text-sm text-neutral-400'><span class='mx-auto mb-1 block h-8 w-8 rounded-full bg-neutral-100'></span>No handoffs — quiet floor</td></tr>{% endfor %}</tbody></table>
+<table class='w-full text-left text-sm'>
+  <thead class='sticky top-0 bg-white'>
+    <tr class='text-neutral-500'>
+      <th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Handoff ID'>ID</th>
+      <th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Customer ID'>Customer</th>
+      <th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Why a human is needed'>Reason</th>
+      <th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Open or resolved'>Status</th>
+      <th class='pb-1.5'></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr class='border-t border-neutral-100 transition-colors hover:bg-[#faf8fd] cursor-pointer'
+        hx-get='/partials/handoffs/{{ r.handoff_id }}'
+        hx-target='#modal-body' hx-swap='innerHTML' onclick='openModal()'>
+      <td class='py-2 pr-2 font-mono text-[12px] font-medium'>#{{ r.handoff_id }}</td>
+      <td class='py-2 pr-2 font-mono text-xs'>{{ r.customer_id }}</td>
+      <td class='py-2 pr-2 text-[13px]'>{{ r.reason }}</td>
+      <td class='py-2 pr-2'>
+        <span class='rounded-full px-2 py-0.5 text-[11px] font-semibold {{ 'bg-amber-100 text-amber-800' if r.status == 'open' else 'bg-neutral-200 text-neutral-500' }}'>{{ r.status_label }}</span>
+      </td>
+      <td class='py-2 text-right whitespace-nowrap' onclick='event.stopPropagation()'>
+        <button hx-post='/partials/handoffs/resolve' hx-vals='{{ r.vals_json|safe }}'
+                hx-target='#console-msg' hx-swap='innerHTML'
+                class='rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 transition-colors inline-flex items-center gap-1'
+                title='Resolve handoff'>Resolve</button>
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td class='py-8 text-center text-sm text-neutral-400'>
+        <span class='mx-auto mb-1 block h-8 w-8 rounded-full bg-neutral-100'></span>No handoffs — quiet floor
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

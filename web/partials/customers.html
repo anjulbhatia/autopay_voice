@@ -1,1 +1,34 @@
-<table class='w-full text-left text-sm'><thead class='sticky top-0 bg-white'><tr class='text-neutral-500'><th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Customer ID'>ID</th><th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Customer name'>Name</th><th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Masked registered number'>Phone</th><th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Amount due in rupees'>Due</th><th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Total call attempts so far'>Tries</th><th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Payment status — click a row for calls, links, and handoffs'>Status</th></tr></thead><tbody>{% for r in rows %}<tr class='border-t border-neutral-100 transition-colors hover:bg-[#faf8fd] cursor-pointer' hx-get='/partials/customers/{{ r.customer_id }}' hx-target='#modal-body' hx-swap='innerHTML' onclick='openModal()'><td class='py-2 pr-2 font-mono text-[12px] font-medium'>{{ r.customer_id }}</td><td class='py-2 pr-2 font-medium text-[13px]'>{{ r.name }}</td><td class='py-2 pr-2 font-mono text-xs text-neutral-500'>{{ r.phone_masked }}</td><td class='py-2 pr-2 font-mono tabular-nums text-[13px]'>₹{{ r.amount_due }}</td><td class='py-2 pr-2 text-center font-mono text-xs'>{{ r.attempts_total }}</td><td class='py-2'><span class='rounded-full px-2 py-0.5 text-[11px] font-semibold {{ r.status_pill }}'>{{ r.status_label }}</span></td></tr>{% else %}<tr><td class='py-8 text-center text-sm text-neutral-400'><span class='mx-auto mb-1 block h-8 w-8 rounded-full bg-neutral-100'></span>No customers in this state</td></tr>{% endfor %}</tbody></table>
+<table class='w-full text-left text-sm'>
+  <thead class='sticky top-0 bg-white'>
+    <tr class='text-neutral-500'>
+      <th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Customer ID'>ID</th>
+      <th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Customer name'>Name</th>
+      <th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Masked registered number'>Phone</th>
+      <th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Amount due in rupees'>Due</th>
+      <th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Total call attempts so far'>Tries</th>
+      <th class='pb-1.5 pr-2 font-semibold normal-case text-[12px]' title='Payment status — click a row for calls, links, and handoffs'>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr class='border-t border-neutral-100 transition-colors hover:bg-[#faf8fd] cursor-pointer'
+        hx-get='/partials/customers/{{ r.customer_id }}'
+        hx-target='#modal-body' hx-swap='innerHTML' onclick='openModal()'>
+      <td class='py-2 pr-2 font-mono text-[12px] font-medium'>{{ r.customer_id }}</td>
+      <td class='py-2 pr-2 font-medium text-[13px]'>{{ r.name }}</td>
+      <td class='py-2 pr-2 font-mono text-xs text-neutral-500'>{{ r.phone_masked }}</td>
+      <td class='py-2 pr-2 font-mono tabular-nums text-[13px]'>₹{{ r.amount_due }}</td>
+      <td class='py-2 pr-2 text-center font-mono text-xs'>{{ r.attempts_total }}</td>
+      <td class='py-2'>
+        <span class='rounded-full px-2 py-0.5 text-[11px] font-semibold {{ r.status_pill }}'>{{ r.status_label }}</span>
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td class='py-8 text-center text-sm text-neutral-400'>
+        <span class='mx-auto mb-1 block h-8 w-8 rounded-full bg-neutral-100'></span>No customers in this state
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

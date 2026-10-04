@@ -1,11 +1,4 @@
-"""autopay launcher. Installed as the `autopay` command.
-
-usage:
-  uv run autopay              serve backend + pay page + merchant console (seeds db first if missing)
-  uv run autopay test         run pytest
-  uv run autopay mcp          launch mcp server (built last per spec)
-  uv run autopay help         show help
-"""
+"""`autopay` launcher: serve | test | mcp (stub) | help. Usage: `autopay help`."""
 import argparse
 import subprocess
 import sys
