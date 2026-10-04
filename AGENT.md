@@ -52,7 +52,7 @@ autopay_voice/
     channels.py             # whatsapp | sms | console adapters (console is default)
     cli.py                  # `autopay` launcher: serve | test | mcp (stub) | help
     config.py               # env settings + business limits (caps, hours, TTLs)
-    dash.py                 # HTMX HTML partials (phones masked)
+    dash.py                 # console view-models, data only (markup in web/partials/)
     db.py                   # schema + idempotent seed
     models.py               # Literal enums + seed validation
     provider.py             # Vapi REST wrapper (web-call default, phone opt-in)

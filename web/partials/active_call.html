@@ -1,0 +1,114 @@
+{% if call %}
+<div class='rounded-xl bg-neutral-50 p-3'>
+    <div class='flex items-center justify-between gap-2'>
+        <p class='text-sm font-bold text-neutral-900'>
+            Call #{{ call.call_id }} · {{ call.name }}
+        </p>
+    </div>
+    <p class='mt-1 font-mono text-sm text-neutral-500'>
+        {{ call.customer_id }} · {{ call.phone_masked }} | Due: ₹{{ call.amount_due }}
+    </p>
+    <p class='mt-1 text-[11px] text-neutral-500'>
+        Verified <span class='inline-flex items-center gap-1.5'><span class='h-1.5 w-1.5 rounded-full {{ 'bg-green-500' if call.verified else 'bg-neutral-300' }}'></span>{{ 'yes' if call.verified else 'no' }}</span>
+    </p>
+</div>
+
+<div class='mt-2 grid grid-cols-3 gap-1.5'>
+    <button hx-post='/partials/calls/stop-active' hx-target='#console-msg' hx-swap='innerHTML' class='rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors inline-flex items-center justify-center gap-1' title='Stop the live call'><i class="hgi hgi-stroke hgi-rounded hgi-call-disabled-02 text-lg"></i>
+        Stop
+    </button>
+    <button hx-post='/partials/calls/join' hx-vals='{{ call.vals_json|safe }}' hx-target='#console-msg' hx-swap='innerHTML' class='rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 transition-colors inline-flex items-center justify-center gap-1' title='Join and open a handoff'>
+        <i class="hgi hgi-stroke hgi-rounded hgi-customer-support text-lg"></i> Join
+    </button>
+    <button hx-get='/partials/calls/{{ call.call_id }}' hx-target='#modal-body' hx-swap='innerHTML' onclick='openModal()' class='rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 transition-colors inline-flex items-center justify-center gap-1' title='Inspect call'>
+        Inspect
+    </button>
+</div>
+
+<form hx-post='/partials/calls/outcome' hx-target='#console-msg' hx-swap='innerHTML' class='mt-2 flex gap-1.5'>
+    <input type='hidden' name='call_id' value='{{ call.call_id }}' />
+    <select name='outcome' class='rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs w-full' title='Log a terminal outcome'>
+        <option value='link_sent'>Link Sent</option><option value='retry_scheduled'>
+            Retry Scheduled
+        </option>
+        <option value='no_answer'>No Answer</option><option value='wrong_person'>
+            Wrong Person
+        </option>
+        <option value='refused'>Refused</option><option value='opted_out'>
+            Opted Out
+        </option>
+        <option value='failed'>
+            Failed
+        </option>
+    </select>
+    <button class='rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary-foreground hover:text-primary transition-colors disabled:opacity-40 shrink-0'>
+        Log
+    </button>
+</form>
+
+<div class='mt-2 rounded-xl border border-neutral-100 p-2'>
+    <p class='text-[10px] font-semibold uppercase tracking-wider text-neutral-400'>
+        Payment Link
+    </p>
+    <form hx-post='/partials/links' hx-target='#link-result' hx-swap='innerHTML' class='mt-1 flex gap-1.5'>
+        <input type='hidden' name='customer_id' value='{{ call.customer_id }}' />
+        <input type='hidden' name='call_id' value='{{ call.call_id }}' />
+        <select name='kind' class='rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs w-full' title='Link type'>
+            <option value='pay_now'>
+                Pay Now
+            </option>
+            <option value='update_mandate'>
+                Update Mandate
+            </option>
+        </select>
+        <select name='channel' class='rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs w-full' title='Send channel'>
+            <option value='console'>
+                Console
+            </option>
+            <option value='whatsapp'>
+                WhatsApp
+            </option>
+            <option value='sms'>
+                SMS
+            </option>
+        </select>
+        <input name='ttl' type='hidden' value='10' /><input name='base_url' type='hidden' value='{{ base_default }}' />
+        <button class='rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary-foreground hover:text-primary transition-colors disabled:opacity-40 shrink-0 inline-flex items-center gap-1' title='Send payment link'>
+            Send
+        </button>
+    </form>
+    <div id='link-result' class='mt-1'>
+    </div>
+</div>
+<div class='mt-2 rounded-xl border border-neutral-100 p-2'>
+    <p class='text-[10px] font-semibold uppercase tracking-wider text-neutral-400'>
+        Handoff
+    </p>
+    <form hx-post='/partials/handoffs/create' hx-target='#console-msg' hx-swap='innerHTML' class='mt-1 grid gap-1.5'>
+        <input type='hidden' name='call_id' value='{{ call.call_id }}' />
+        <select name='reason' class='rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs w-full' title='Handoff reason'>
+            <option value='asked_for_human'>
+                Asked For Human
+            </option>
+            <option value='dispute'>
+                Dispute
+            </option>
+            <option value='hardship'>
+                Hardship
+            </option>
+            <option value='human_joined'>
+                Human Joined
+            </option>
+            <option value='other'>
+                Other
+            </option>
+        </select>
+        <input name='notes' placeholder='Notes for the human…' class='rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs w-full' />
+        <button class='rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 transition-colors w-full'>
+            Open Handoff
+        </button>
+    </form>
+</div>
+{% else %}
+<div class='py-8 text-center'><p class='text-sm font-semibold text-neutral-700'>No Live Call</p><p class='mt-1 text-xs text-neutral-400'>Pick a customer above and press Start Call.</p></div>
+{% endif %}

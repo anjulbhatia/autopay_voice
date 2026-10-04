@@ -8,7 +8,7 @@ flowchart TB
     end
     subgraph backend["Backend (FastAPI + SQLite)"]
         api["api.py\npages · partials · webhooks"]
-        dash["dash.py\nHTML partials (phones masked)"]
+        dash["dash.py\nview-models (data only)"]
         tools["tools.py\nsingle shared logic"]
         rank["ranking.py\np_pay · tiers"]
         agentm["agent.py\nprompts · budgets"]
@@ -53,8 +53,9 @@ flowchart TB
 - `app/provider.py` — Vapi REST wrapper (web-call default, phone opt-in).
 - `app/api.py` — pages (`/console`, `/pay/{token}`), HTMX partials
   (`/partials/*`), Vapi webhooks (`/vapi/tool`, `/vapi/events`).
-- `app/dash.py` — server-rendered HTML partials for the console.
-  Phones masked, values escaped, one function per panel.
+- `app/dash.py` — console view-models, data only (no HTML).
+  Markup lives in `web/partials/*.html` (Jinja components, htmx-swapped);
+  `app/api.py` renders them. Phones masked, values escaped by Jinja.
 - `app/channels.py` — link delivery adapters (console default, mock
   whatsapp/sms documented).
 - `app/cli.py` — `autopay` launcher: single serve path for api +

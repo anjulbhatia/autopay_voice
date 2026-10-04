@@ -40,7 +40,7 @@ tour, voice wiring, and public-link setup.
    [call workflow](docs/call-workflow.md).
 
 ```
-browser (/console, /pay/*) ──► FastAPI (api.py + dash.py partials)
+browser (/console, /pay/*) ──► FastAPI (api.py renders web/partials via dash.py view-models)
                                     │  ▲
 Vapi (/vapi/tool, /vapi/events) ────┘  │  shared logic (tools.py, ranking.py)
                                        ▼

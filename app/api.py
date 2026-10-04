@@ -44,6 +44,15 @@ async def _payload(request: Request) -> dict:
         return {}
 
 
+def _partial(request: Request, name: str, context: dict):
+    """Render a Jinja component from web/partials/. Data comes from app/dash."""
+    return templates.TemplateResponse(request=request, name=f"partials/{name}", context=context)
+
+
+def _msg(request: Request, text: str, good: bool = True):
+    return _partial(request, "message.html", {"text": text, "good": good})
+
+
 class pay_result_in(BaseModel):
     token: str
     outcome: Literal["paid", "failed"]
@@ -222,14 +231,15 @@ async def console_page(request: Request):
 
 
 @app.get("/partials/queue", response_class=HTMLResponse)
-async def partial_queue(mode: str = "expected_value", q: str = "", tier: str = "all"):
-    return dash.queue_partial(mode if mode in ("expected_value", "easiest", "highest") else "expected_value",
-                              q=q, tier=tier)
+async def partial_queue(request: Request, mode: str = "expected_value", q: str = "", tier: str = "all"):
+    return _partial(request, "queue.html", dash.queue_data(
+        mode if mode in ("expected_value", "easiest", "highest") else "expected_value",
+        q=q, tier=tier))
 
 
 @app.get("/partials/active-call", response_class=HTMLResponse)
-async def partial_active_call():
-    return dash.active_call_partial()
+async def partial_active_call(request: Request):
+    return _partial(request, "active_call.html", {"call": dash.active_call_data()})
 
 
 @app.post("/partials/queue/start", response_class=HTMLResponse)
@@ -244,11 +254,11 @@ async def partial_start(request: Request):
     try:
         started = tools.start_call(body.get("customer_id", ""), mode="web", source="dashboard")
     except ValueError as exc:
-        return dash.message(str(exc), good=False)
+        return _msg(request, str(exc), good=False)
     if mode == "phone":
         if str(body.get("confirm", "")).lower() not in ("true", "1", "on", "yes"):
-            return dash.message("phone mode needs the confirm checkbox (only call numbers you control)",
-                                good=False)
+            return _msg(request, "phone mode needs the confirm checkbox (only call numbers you control)",
+                        good=False)
         try:
             conn = get_conn()
             try:
@@ -269,15 +279,15 @@ async def partial_start(request: Request):
             finally:
                 conn.close()
             dest = provider.test_destination(body.get("to_number", ""))
-            return dash.message(f"call {started['call_id']} dialing {mask_phone(dest)}"
+            return _msg(request, f"call {started['call_id']} dialing {mask_phone(dest)}"
                                 + (f" via {provider.vapi_caller_number()}" if provider.vapi_caller_number() else ""))
         except Exception as exc:  # provider errors stay in-app, row stays open
-            return dash.message(f"call {started['call_id']} open but dial failed: {exc}", good=False)
-    return dash.message(f"call {started['call_id']} open ({started['tier']}, p={started['p_pay']})")
+            return _msg(request, f"call {started['call_id']} open but dial failed: {exc}", good=False)
+    return _msg(request, f"call {started['call_id']} open ({started['tier']}, p={started['p_pay']})")
 
 
 @app.post("/partials/calls/stop-active", response_class=HTMLResponse)
-async def partial_stop_active():
+async def partial_stop_active(request: Request):
     """Stop Call button: closes the latest open call as no_answer."""
     conn = get_conn()
     try:
@@ -286,30 +296,30 @@ async def partial_stop_active():
     finally:
         conn.close()
     if row is None:
-        return dash.message("no live call to stop")
+        return _msg(request, "no live call to stop")
     try:
         tools.log_outcome(int(row["call_id"]), "no_answer", "stopped from console")
     except (TypeError, ValueError) as exc:
-        return dash.message(str(exc), good=False)
-    return dash.message(f"call {row['call_id']} stopped")
+        return _msg(request, str(exc), good=False)
+    return _msg(request, f"call {row['call_id']} stopped")
 
 
 @app.get("/partials/customers", response_class=HTMLResponse)
-async def partial_customers(status: str = "all", q: str = ""):
-    return dash.customers_partial(status, q)
+async def partial_customers(request: Request, status: str = "all", q: str = ""):
+    return _partial(request, "customers.html", dash.customers_data(status, q))
 
 
 @app.get("/partials/customers/{customer_id}", response_class=HTMLResponse)
-async def partial_customer_detail(customer_id: str):
-    found = dash.customer_detail_partial(customer_id)
+async def partial_customer_detail(request: Request, customer_id: str):
+    found = dash.customer_detail_data(customer_id)
     if found is None:
         raise HTTPException(status_code=404, detail="unknown customer")
-    return found
+    return _partial(request, "customer_detail.html", found)
 
 
 @app.get("/partials/calls", response_class=HTMLResponse)
-async def partial_calls(q: str = "", outcome: str = "all"):
-    return dash.calls_partial(q=q, outcome=outcome)
+async def partial_calls(request: Request, q: str = "", outcome: str = "all"):
+    return _partial(request, "calls.html", dash.calls_data(q=q, outcome=outcome))
 
 
 @app.post("/partials/calls/outcome", response_class=HTMLResponse)
@@ -319,8 +329,8 @@ async def partial_outcome(request: Request):
         tools.log_outcome(int(body.get("call_id", 0)), body.get("outcome", "failed"),
                           str(body.get("notes", ""))[:200])
     except (TypeError, ValueError) as exc:
-        return dash.message(str(exc), good=False)
-    return dash.message(f"call {body.get('call_id')} → {body.get('outcome')}")
+        return _msg(request, str(exc), good=False)
+    return _msg(request, f"call {body.get('call_id')} → {body.get('outcome')}")
 
 
 @app.post("/partials/calls/cut", response_class=HTMLResponse)
@@ -329,8 +339,8 @@ async def partial_cut(request: Request):
     try:
         tools.log_outcome(int(body.get("call_id", 0)), "no_answer", "cut from console")
     except (TypeError, ValueError) as exc:
-        return dash.message(str(exc), good=False)
-    return dash.message(f"call {body.get('call_id')} cut")
+        return _msg(request, str(exc), good=False)
+    return _msg(request, f"call {body.get('call_id')} cut")
 
 
 @app.post("/partials/calls/join", response_class=HTMLResponse)
@@ -339,13 +349,13 @@ async def partial_join(request: Request):
     try:
         result = tools.request_human_handoff(int(body.get("call_id", 0)), "human_joined", "merchant joined")
     except (TypeError, ValueError) as exc:
-        return dash.message(str(exc), good=False)
-    return dash.message(f"joined — handoff {result['handoff_id']} open")
+        return _msg(request, str(exc), good=False)
+    return _msg(request, f"joined — handoff {result['handoff_id']} open")
 
 
 @app.get("/partials/handoffs", response_class=HTMLResponse)
-async def partial_handoffs(open: int = 1, q: str = ""):
-    return dash.handoffs_partial(bool(open), q)
+async def partial_handoffs(request: Request, open: int = 1, q: str = ""):
+    return _partial(request, "handoffs.html", dash.handoffs_data(bool(open), q))
 
 
 @app.post("/partials/handoffs/create", response_class=HTMLResponse)
@@ -356,8 +366,8 @@ async def partial_handoff_create(request: Request):
                                              body.get("reason", "asked_for_human"),
                                              str(body.get("notes", ""))[:500])
     except (TypeError, ValueError) as exc:
-        return dash.message(str(exc), good=False)
-    return dash.message(f"handoff {result['handoff_id']} open for call {body.get('call_id')}")
+        return _msg(request, str(exc), good=False)
+    return _msg(request, f"handoff {result['handoff_id']} open for call {body.get('call_id')}")
 
 
 @app.post("/partials/handoffs/resolve", response_class=HTMLResponse)
@@ -366,7 +376,7 @@ async def partial_resolve(request: Request):
     try:
         handoff_id = int(body.get("handoff_id", 0))
     except (TypeError, ValueError) as exc:
-        return dash.message(str(exc), good=False)
+        return _msg(request, str(exc), good=False)
     conn = get_conn()
     try:
         conn.execute("update handoffs set status = 'done', resolved_at = ? where handoff_id = ?",
@@ -376,33 +386,33 @@ async def partial_resolve(request: Request):
         conn.commit()
     finally:
         conn.close()
-    return dash.message(f"handoff {body.get('handoff_id')} resolved")
+    return _msg(request, f"handoff {body.get('handoff_id')} resolved")
 
 
 @app.get("/partials/audit", response_class=HTMLResponse)
-async def partial_audit(limit: int = 50, q: str = "", call_id: Optional[int] = None):
-    return dash.audit_partial(max(1, min(limit, 200)), q=q, call_id=call_id)
+async def partial_audit(request: Request, limit: int = 50, q: str = "", call_id: Optional[int] = None):
+    return _partial(request, "audit.html", dash.audit_data(max(1, min(limit, 200)), q=q, call_id=call_id))
 
 
 @app.get("/partials/events", response_class=HTMLResponse)
-async def partial_events():
-    return dash.events_partial()
+async def partial_events(request: Request):
+    return _partial(request, "events.html", dash.events_data())
 
 
 @app.get("/partials/calls/{call_id}", response_class=HTMLResponse)
-async def partial_call_detail(call_id: int):
-    found = dash.call_detail_partial(call_id)
+async def partial_call_detail(request: Request, call_id: int):
+    found = dash.call_detail_data(call_id)
     if found is None:
         raise HTTPException(status_code=404, detail="unknown call")
-    return found
+    return _partial(request, "call_detail.html", found)
 
 
 @app.get("/partials/handoffs/{handoff_id}", response_class=HTMLResponse)
-async def partial_handoff_detail(handoff_id: int):
-    found = dash.handoff_detail_partial(handoff_id)
+async def partial_handoff_detail(request: Request, handoff_id: int):
+    found = dash.handoff_detail_data(handoff_id)
     if found is None:
         raise HTTPException(status_code=404, detail="unknown handoff")
-    return found
+    return _partial(request, "handoff_detail.html", found)
 
 
 @app.post("/partials/links", response_class=HTMLResponse)
@@ -418,13 +428,13 @@ async def partial_link(request: Request):
     try:
         ttl = int(body.get("ttl", 10))
     except (TypeError, ValueError):
-        return dash.message("bad ttl (1-1440 required)", good=False)
+        return _msg(request, "bad ttl (1-1440 required)", good=False)
     if channel not in VALID_LINK_CHANNELS:
-        return dash.message(f"unknown channel {channel!r}", good=False)
+        return _msg(request, f"unknown channel {channel!r}", good=False)
     if body.get("kind", "pay_now") not in VALID_LINK_KINDS:
-        return dash.message(f"unknown kind {body.get('kind')!r}", good=False)
+        return _msg(request, f"unknown kind {body.get('kind')!r}", good=False)
     if not MIN_LINK_TTL <= ttl <= MAX_LINK_TTL:
-        return dash.message("bad ttl (1-1440 required)", good=False)
+        return _msg(request, "bad ttl (1-1440 required)", good=False)
     conn = get_conn()
     try:
         person = conn.execute("select name, phone, amount_due from customers where customer_id = ?",
@@ -439,16 +449,14 @@ async def partial_link(request: Request):
         raw_base = (body.get("base_url") or "").strip() if isinstance(body.get("base_url"), str) else ""
         if raw_base and not (raw_base.startswith("https://") and " " not in raw_base
                              and '"' not in raw_base and "<" not in raw_base):
-            return dash.message("bad base_url (https:// origin required)", good=False)
+            return _msg(request, "bad base_url (https:// origin required)", good=False)
         link = tools.create_payment_link(customer_id, body.get("kind", "pay_now"), channel,
                                          raw_base or base_url() or None, ttl,
                                          call_id=call_id)
     except ValueError as exc:
-        return dash.message(str(exc), good=False)
+        return _msg(request, str(exc), good=False)
     text = channels.render(channel, person["name"], person["amount_due"], link["url"])
     receipt = channels.send(channel, mask_phone(person["phone"]), text)
-    return (f"<p class='font-mono text-sm break-all bg-neutral-100 rounded px-2 py-1'>{link['url']}"
-            f" <button onclick=\"navigator.clipboard.writeText('{link['url']}')\""
-            f" class='underline text-xs'>copy</button></p>"
-            f"<p class='text-xs text-neutral-500 mt-1'>expires {link['expires_at']} · "
-            f"{receipt['channel']} {receipt['status']}</p>")
+    return _partial(request, "link_result.html", {
+        "url": link["url"], "expires_at": link["expires_at"],
+        "channel": receipt["channel"], "status": receipt["status"]})
