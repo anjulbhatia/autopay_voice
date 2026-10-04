@@ -2,6 +2,8 @@
 import json
 import os
 
+from app import agent as agent_rules
+
 tool_names = ["verify_identity", "get_failed_payment", "send_payment_link",
               "schedule_retry", "request_human_handoff", "log_outcome"]
 
@@ -53,13 +55,8 @@ def api_key():
     return key
 
 
-def vapi_caller_number():
-    """Your taken Vapi number (caller-id side). Set VAPI_PHONE_NUMBER in env."""
-    return os.environ.get("VAPI_PHONE_NUMBER", "").strip()
-
-
 def vapi_phone_id():
-    """Vapi phoneNumberId UUID from the dashboard. Preferred for outbound dial."""
+    """Vapi phoneNumberId UUID from the dashboard. Required for outbound dial."""
     return os.environ.get("VAPI_PHONE_NUMBER_ID", "").strip()
 
 
@@ -75,6 +72,7 @@ def build_assistant(system_prompt, base_url, model="gpt-4o-mini"):
     url = server_url(base_url)
     return {
         "name": "autopay-recovery (synthetic demo)",
+        "first_message": agent_rules.first_message(),
         "server": {"url": url},
         "serverMessages": list(server_messages),
         "model": {"provider": "openai", "model": model,
@@ -126,28 +124,26 @@ def test_destination(explicit=""):
 
 
 def start_phone_call(system_prompt, base_url, to_number=None, key=None, confirm=False,
-                     from_number=None, client=None):
+                     client=None):
     """Outbound phone. Refuses unless confirm=True with a destination —
     only call numbers you control or have permission for.
 
     Destination: TEST_CALL_TO_NUMBER env wins when set, else to_number arg.
-    Caller id: VAPI_PHONE_NUMBER_ID env preferred, else VAPI_PHONE_NUMBER.
+    Dials from VAPI_PHONE_NUMBER_ID (the SDK takes a phoneNumberId, not a
+    raw caller number).
     """
     dest = test_destination(to_number)
     if not confirm or not dest:
         raise vapi_error("phone calls need confirm=True and a destination you control "
                          "(TEST_CALL_TO_NUMBER or explicit to_number)")
-    kwargs = {"assistant": build_assistant(system_prompt, base_url),
-              "customer": {"number": dest}}
     phone_id = vapi_phone_id()
-    caller = from_number or vapi_caller_number()
-    if phone_id:
-        kwargs["phone_number_id"] = phone_id
-    elif caller:
-        kwargs["phone_number"] = caller
+    if not phone_id:
+        raise vapi_error("phone calls need VAPI_PHONE_NUMBER_ID (UUID from the Vapi dashboard)")
     sdk = client if client is not None else _sdk(key)
     try:
-        call = sdk.calls.create(**kwargs)
+        call = sdk.calls.create(assistant=build_assistant(system_prompt, base_url),
+                                phone_number_id=phone_id,
+                                customer={"number": dest})
     except Exception as exc:
         _sdk_error(exc)
     return _plain(call)
@@ -186,7 +182,8 @@ def tool_name_args(item):
     item = item or {}
     fn = item.get("function") or {}
     name = item.get("name") or fn.get("name", "")
-    args = item.get("arguments") or fn.get("arguments") or {}
+    args = item.get("arguments") or fn.get("arguments") or item.get("parameters") \
+        or fn.get("parameters") or {}
     if isinstance(args, str):
         try:
             args = json.loads(args) if args else {}

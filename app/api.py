@@ -289,8 +289,7 @@ async def partial_start(request: Request):
             finally:
                 conn.close()
             dest = provider.test_destination(body.get("to_number", ""))
-            return _msg(request, f"call {started['call_id']} dialing {mask_phone(dest)}"
-                                + (f" via {provider.vapi_caller_number()}" if provider.vapi_caller_number() else ""))
+            return _msg(request, f"call {started['call_id']} dialing {mask_phone(dest)}")
         except Exception as exc:  # provider errors stay in-app, row stays open
             return _msg(request, f"call {started['call_id']} open but dial failed: {exc}", good=False)
     return _msg(request, f"call {started['call_id']} open ({started['tier']}, p={started['p_pay']})")

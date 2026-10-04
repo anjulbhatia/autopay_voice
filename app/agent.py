@@ -92,6 +92,14 @@ def generic_message():
             "Please call back on the number in your app, or I can arrange a callback.")
 
 
+def first_message():
+    """Opening line for every call. Generic by design: no amounts, dates,
+    or account details before verify_identity succeeds."""
+    return ("Hello, I am Saisha calling on behalf of the merchant about a recent "
+            "autopay payment that did not go through. May I confirm I am speaking "
+            "with the right person so I can help?")
+
+
 threat_phrases = ["court", "police", "legal action", "blacklist", "account blocked",
                   "last warning", "warrant", "lawsuit"]
 credential_phrases = ["otp", "cvv", "upi pin", "card number", "password", "pin number"]

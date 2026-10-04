@@ -42,6 +42,8 @@ def test_provider_guards(monkeypatch):
         pass
     payload = provider.build_assistant("sys", "https://base.test/")
     assert payload["server"]["url"] == "https://base.test/vapi/tool"
+    assert payload["first_message"] == agent.first_message()
+    assert "₹" not in payload["first_message"] and "$" not in payload["first_message"]
     assert payload["serverMessages"] == ["tool-calls", "end-of-call-report"]
     assistants_tools = payload["model"]["tools"]
     assert [t["function"]["name"] for t in assistants_tools] == provider.tool_names
@@ -69,11 +71,13 @@ def test_provider_guards(monkeypatch):
         raise AssertionError("should have raised")
     except provider.vapi_error:
         pass
+    monkeypatch.setenv("VAPI_PHONE_NUMBER_ID", "phone-uuid-1")
     phone = fake_client()
     placed = provider.start_phone_call("sys", "https://base.test", "+91-90000-00001",
                                        confirm=True, client=phone)
     assert placed["id"] == "call-1"
     assert phone.calls.kwargs["customer"] == {"number": "+91-90000-00001"}
+    assert phone.calls.kwargs["phone_number_id"] == "phone-uuid-1"
 
 
 def test_tool_envelope_helpers():
@@ -87,6 +91,9 @@ def test_tool_envelope_helpers():
     assert [provider.tool_call_id_of(i) for i in items] == ["tu-1", "tu-2"]
     assert provider.tool_name_args(items[0]) == ("verify_identity", {"answer": "1990"})
     assert provider.tool_name_args(items[1]) == ("log_outcome", {"result": "failed"})
+    legacy = {"functionCall": {"name": "verify_identity", "parameters": {"answer": "1990"}}}
+    assert provider.tool_name_args(provider.tool_calls_of(
+        {"message": legacy})[0]) == ("verify_identity", {"answer": "1990"})
     ok = provider.tool_result("tu-1", {"ok": True})
     assert ok == {"toolCallId": "tu-1", "result": '{"ok": true}'}
     err = provider.tool_error("tu-2", "nope")

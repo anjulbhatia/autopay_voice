@@ -9,22 +9,33 @@ re-check the docs before changing any payload, Vapi iterates fast.
 
 ```python
 from vapi import Vapi
+
 client = Vapi(token=VAPI_API_KEY)
 ```
 
-- **Web call** (default, no phone number): `client.calls.create(assistant=...)`.
-- **Outbound phone**: `client.calls.create(assistant=..., phone_number_id=...,
-  customer={"number": ...})`. Requires `confirm=True` plus a destination you
-  control (`TEST_CALL_TO_NUMBER` env wins, else per-call input).
-  `VAPI_PHONE_NUMBER_ID` preferred; raw `VAPI_PHONE_NUMBER` is a best-effort
-  fallback. Free Vapi numbers are US-only per Vapi docs — web-call first.
+- **Outbound phone** (merchant dials from the console):
+  `client.calls.create(assistant=..., phone_number_id=..., customer={"number": ...})`.
+  Requires `confirm=True` plus a destination you control
+  (`TEST_CALL_TO_NUMBER` env wins, else per-call input) and
+  `VAPI_PHONE_NUMBER_ID` (UUID from the dashboard — the SDK takes a
+  phoneNumberId, not a raw caller number). Free Vapi numbers are US-only
+  per Vapi docs — web-call first.
+- **Web call**: browser voice runs through Vapi's client Web SDK, not the
+  server SDK. `start_web_call()` creates the server-side call object and
+  returns its `webCallUrl` for a future widget to join; the console's
+  "Web Call" mode today only opens the internal call row.
 
 Every call uses a **transient assistant** built per customer by
-`provider.build_assistant()` from `app/agent.py assemble_prompt()` output:
-name + `model: {provider: openai, model, messages, tools}` + `server: {url}` +
-`serverMessages: ["tool-calls", "end-of-call-report"]`.
-Nothing is stored server-side; `agent/vapi_config.json` mirrors the same
-shape as a reference for dashboard/CLI import only.
+`provider.build_assistant()` from `app/agent.py` output (generic
+`first_message` + assembled system prompt): name + `model: {provider: openai,
+model, messages, tools}` + `server: {url}` + `serverMessages:
+["tool-calls", "end-of-call-report"]`. Transient-per-call is the documented
+fit when the system message differs every call (per-customer tier prompt
+here). Nothing is stored server-side; `agent/vapi_config.json` mirrors the
+same shape as a reference for dashboard Talk-button testing (paste
+`BASE_URL`, attach tools, Talk). Assistant/tool payloads validate against
+the installed SDK DTOs (`CreateAssistantDto`,
+`OpenAiModelToolsItem_Function`, `CreateCustomerDto`).
 
 ## Tools
 
@@ -38,7 +49,8 @@ tool url → assistant url → number url → org url):
 ## Webhooks
 
 - `POST /vapi/tool` — request: `message.type == "tool-calls"` with
-  `message.toolCallList[] = {id, function: {name, arguments}}`.
+  `message.toolCallList[] = {id, function: {name, arguments}}` (legacy
+  `functionCall` + `parameters` shape also parsed).
   Response, always HTTP 200:
   `{"results": [{"toolCallId": id, "result": "<flat string>"}, ...]}`.
   Failures use `"error"` instead of `"result"` (Vapi speaks it; a non-200
