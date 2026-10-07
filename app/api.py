@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -218,6 +218,9 @@ async def pay_page(request: Request, token: str):
                  "expires_in": found["expires_in"]},
     )
 
+@app.get("/")
+async def root_page():
+    return RedirectResponse(url="/console")
 
 @app.get("/console", response_class=HTMLResponse)
 async def console_page(request: Request):

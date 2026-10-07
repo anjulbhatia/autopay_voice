@@ -38,7 +38,7 @@
       </div>
     </div>
 
-    <header class="shrink-0 border-b border-neutral-200 bg-white/85 backdrop-blur">
+    <header class="fixed z-10 w-full shrink-0 border-b border-neutral-200 bg-white/85 backdrop-blur">
       <div class="mx-auto flex h-11 w-full items-center justify-between px-3">
         <span class="flex items-center gap-2">
           <img src="/assets/pay_icon.png" width="20" height="20" alt="AutoPay icon" />
@@ -69,8 +69,8 @@
       </div>
     </header>
 
-    <div class="flex-1 min-h-0 flex mx-auto w-full max-w-[1400px] px-2 sm:px-3 py-2 gap-2 pb-20 sm:pb-2">
-      <aside class="max-sm:fixed max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:z-40 max-sm:border-t max-sm:border-neutral-200 max-sm:bg-white/95 max-sm:backdrop-blur max-sm:px-3 max-sm:py-2 max-sm:[padding-bottom:env(safe-area-inset-bottom)] sm:w-36 sm:shrink-0 sm:overflow-y-auto">
+    <div class="flex-1 min-h-0 flex mx-auto w-full max-w-[1400px] px-2 sm:px-3 py-2 gap-2 pb-20 sm:pb-2 mt-16">
+      <aside class="fixed max-sm:fixed max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:z-40 max-sm:border-t max-sm:border-neutral-200 max-sm:bg-white/95 max-sm:backdrop-blur max-sm:px-3 max-sm:py-2 max-sm:[padding-bottom:env(safe-area-inset-bottom)] sm:w-36 sm:shrink-0 sm:overflow-y-auto">
         <nav class="flex max-sm:justify-around sm:flex-col gap-1 sm:rounded-xl sm:border sm:border-neutral-200 sm:bg-white sm:p-1.5 sm:sticky sm:top-0" aria-label="Console sections">
           <button data-nav="calls" class="flex flex-col sm:flex-row items-center gap-0.5 sm:gap-2 sm:whitespace-nowrap rounded-lg px-3 py-1.5 sm:py-2 text-[10px] sm:text-[13px] text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900">
             <i class="hgi hgi-stroke hgi-rounded hgi-call-02 text-lg"></i>
@@ -88,7 +88,7 @@
         </nav>
       </aside>
 
-      <main class="flex-1 min-w-0 min-h-0 overflow-y-auto sm:overflow-visible">
+      <main class="min-sm:ml-40 flex-1 min-w-0 min-h-0 overflow-y-auto sm:overflow-visible">
         <!-- ============ CALLS ============ -->
         <section data-section="calls" class="flex flex-col gap-2 min-h-0 mb-12">
           <div class="shrink-0 grid grid-cols-3 sm:grid-cols-6 gap-2">
