@@ -139,26 +139,37 @@ def init_db(conn: sqlite3.Connection) -> None:
 
 
 def seed_from_json(json_path: Path | str, conn: sqlite3.Connection) -> int:
-    """Idempotent seed: validates via pydantic, INSERT OR IGNORE. Returns new rows."""
+    """Idempotent seed: validates via pydantic, upserts on rerun. Returns new rows."""
     records = json.loads(Path(json_path).read_text(encoding="utf-8"))
     inserted = 0
     for raw in records:
         c = CustomerSeed(**raw)  # type-check first, fail fast on bad seed data
-        cur = conn.execute(
-            """INSERT OR IGNORE INTO customers
+        exists = conn.execute(
+            "select 1 from customers where customer_id = ?", (c.customer_id,)).fetchone()
+        conn.execute(
+            """INSERT INTO customers
                (customer_id, name, gender, phone, amount_due, due_date,
                 failure_reason, payment_status, default_history,
                 last_call_at, last_message_at, attempts_total,
                 past_call_notes, security_question,
                 security_answer_hash, security_salt, do_not_call)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(customer_id) DO UPDATE SET
+                name=excluded.name, gender=excluded.gender, phone=excluded.phone,
+                amount_due=excluded.amount_due, due_date=excluded.due_date,
+                failure_reason=excluded.failure_reason, default_history=excluded.default_history,
+                past_call_notes=excluded.past_call_notes,
+                security_question=excluded.security_question,
+                security_answer_hash=excluded.security_answer_hash,
+                security_salt=excluded.security_salt, do_not_call=excluded.do_not_call""",
             (c.customer_id, c.name, c.gender, c.phone, c.amount_due, c.due_date,
              c.failure_reason, c.payment_status, c.default_history,
              c.last_call_at, c.last_message_at, c.attempts_total,
              c.past_call_notes, c.security_question,
              c.security_answer_hash, c.security_salt, c.do_not_call),
         )
-        inserted += cur.rowcount
+        if not exists:
+            inserted += 1
     conn.commit()
     return inserted
 

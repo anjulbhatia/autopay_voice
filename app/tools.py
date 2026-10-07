@@ -4,9 +4,9 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from app import agent as agent_rules, channels, ranking
-from app.config import (DEFAULT_TTL_MINUTES, MAX_VERIFY_ATTEMPTS, TOKEN_ALPHABET,
-                        TOKEN_LENGTH, VALID_CALL_OUTCOMES, VALID_LINK_CHANNELS,
-                        VALID_LINK_KINDS, base_url as server_base_url)
+from app.config import (DEFAULT_TTL_MINUTES, MAX_LINK_TTL, MAX_VERIFY_ATTEMPTS, MIN_LINK_TTL,
+                         TOKEN_ALPHABET, TOKEN_LENGTH, VALID_CALL_OUTCOMES, VALID_LINK_CHANNELS,
+                         VALID_LINK_KINDS, base_url as server_base_url)
 from app.db import (count_calls_today, get_conn, init_db, repo_root,
                     seed_from_json, utcnow, verify_security_answer)
 from app.utils import mask_phone
@@ -159,19 +159,25 @@ def mint_token(conn, length=TOKEN_LENGTH):
     raise RuntimeError("token space exhausted")
 
 
-def create_payment_link(customer_id, kind="pay_now", channel="console", base_url=None,
-                        ttl_minutes=DEFAULT_TTL_MINUTES, call_id=None, conn=None):
+def create_payment_link(customer_id, kind="pay_now", channel="console", base_url_override=None,
+                        ttl_minutes=DEFAULT_TTL_MINUTES, call_id=None, conn=None,
+                        **kwargs):
     """Mint a single-use expiring link. base_url falls back to $BASE_URL
     (the cloudflared origin); empty means a relative /pay path for local use."""
     if kind not in VALID_LINK_KINDS:
         raise ValueError(f"unknown link kind {kind!r}")
     if channel not in VALID_LINK_CHANNELS:
         raise ValueError(f"unknown channel {channel!r}")
+    # Back-compat: older callers pass base_url= as keyword.
+    if base_url_override is None and "base_url" in kwargs:
+        base_url_override = kwargs["base_url"]
     try:
         ttl_minutes = int(ttl_minutes)
     except (TypeError, ValueError):
         raise ValueError(f"bad ttl {ttl_minutes!r}")
-    base_url = base_url if base_url else server_base_url()
+    if not MIN_LINK_TTL <= ttl_minutes <= MAX_LINK_TTL:
+        raise ValueError(f"bad ttl {ttl_minutes!r} (1-1440 required)")
+    resolved_base = base_url_override if base_url_override else server_base_url()
     own = conn is None
     conn = conn or get_conn()
     try:
@@ -187,7 +193,7 @@ def create_payment_link(customer_id, kind="pay_now", channel="console", base_url
         log_audit(conn, "agent" if call_id else "merchant", "create_payment_link",
                   json.dumps({"token": token[:2] + "…", "kind": kind, "channel": channel}), "ok", call_id)
         conn.commit()
-        url = f"{base_url.rstrip('/')}/pay/{token}" if base_url else f"/pay/{token}"
+        url = f"{resolved_base.rstrip('/')}/pay/{token}" if resolved_base else f"/pay/{token}"
         return {"token": token, "url": url, "expires_at": expires}
     finally:
         if own:

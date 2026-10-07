@@ -56,7 +56,15 @@ def test_verify_gate_and_links(tmp_path):
     assert link["url"].startswith("https://x.test/pay/")
     ctx = tools.get_link_context(link["token"], conn)
     assert ctx["status"] == "ok" and 0 < ctx["expires_in"] <= 600
-    old = tools.create_payment_link("CUST099", ttl_minutes=-1, conn=conn)
+    try:
+        tools.create_payment_link("CUST099", ttl_minutes=-1, conn=conn)
+        assert False, "negative ttl must raise"
+    except ValueError:
+        pass
+    old = tools.create_payment_link("CUST099", ttl_minutes=1, conn=conn)
+    conn.execute("update payment_links set expires_at = '2000-01-01T00:00:00+00:00' where token = ?",
+                 (old["token"],))
+    conn.commit()
     assert tools.get_link_context(old["token"], conn)["status"] == "expired"
 
     hand = tools.request_human_handoff(call2["call_id"], "asked_for_human", conn=conn)
