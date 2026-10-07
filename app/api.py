@@ -250,9 +250,9 @@ async def pay_page(request: Request, token: str):
                  "expires_in": found["expires_in"]},
     )
 
-@app.get("/")
-async def root_page():
-    return RedirectResponse(url="/console")
+@app.get("/", response_class=HTMLResponse)
+async def root_page(request: Request):
+    return templates.TemplateResponse(request=request, name="gateway.html", context={})
 
 @app.get("/console", response_class=HTMLResponse)
 async def console_page(request: Request):

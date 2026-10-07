@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Merchant Console - Autopay</title>
+    <link rel="icon" type="image/png" href="/assets/pay_icon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ffffff" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-primary: #e4c5ff;
+        --color-primary-foreground: #2b0a49;
+      }
+
+      button, a {
+        @apply cursor-pointer;
+      }
+    </style>
+  </head>
+  <body class="flex min-h-screen flex-col items-center justify-center bg-neutral-50 p-4 text-neutral-800 antialiased">
+    <main class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+      <span class="flex items-center gap-2">
+        <img src="/assets/pay_icon.png" width="22" height="22" alt="AutoPay icon" />
+        <p class="text-[11px] font-bold uppercase tracking-widest text-primary-foreground">Authorized User Access Gateway</p>
+      </span>
+      <h1 class="mt-2 text-xl font-bold tracking-tight text-neutral-900">Merchant Console</h1>
+      <p class="mt-2 text-sm text-neutral-500">Local demo session. All records are synthetic — no real customer data, no real money movement.</p>
+      <form action="/console" method="get" onsubmit="try{var n=document.getElementById('gateway-name').value.trim();if(n)window.sessionStorage.setItem('autopay_operator',n);}catch(e){}">
+        <label class="mt-4 block text-xs font-medium text-neutral-500">Operator Name
+          <input id="gateway-name" name="operator" type="text" placeholder="Floor operator" autocomplete="off"
+                 class="mt-1 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm" />
+        </label>
+        <button type="submit"
+                class="mt-4 w-full rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-foreground hover:text-primary">
+          Enter Console
+        </button>
+      </form>
+    </main>
+  </body>
+</html>

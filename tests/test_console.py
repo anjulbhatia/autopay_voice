@@ -18,6 +18,9 @@ def test_console_flows(tmp_path, monkeypatch):
     client = live_client(tmp_path, monkeypatch)
     monkeypatch.setattr("app.agent.calling_allowed", lambda now=None: True)
     assert client.get("/console").status_code == 200
+    gate = client.get("/")
+    assert gate.status_code == 200
+    assert "Enter Console" in gate.text and 'action="/console"' in gate.text
     queue = client.get("/partials/queue?mode=easiest")
     assert queue.status_code == 200 and "CUST" in queue.text
     assert "CUST" in client.get("/partials/customers?status=failed").text

@@ -1,9 +1,8 @@
-/* console.js — session gateway, nav, dial queue, call controls, toasts, modal */
+/* console.js — nav, dial queue, call controls, toasts, modal */
 (function () {
   "use strict";
 
   var QUEUE_KEY = "autopay_dial_queue";
-  var SESSION_KEY = "autopay_session";
   var dialQueue = [];
   try { dialQueue = JSON.parse(window.localStorage.getItem(QUEUE_KEY) || "[]"); } catch (e) { dialQueue = []; }
   if (!Array.isArray(dialQueue)) dialQueue = [];
@@ -12,28 +11,9 @@
     return typeof window.anime !== "undefined";
   }
 
-  /* ---------- session gateway ---------- */
-
-  function sessionActive() {
-    try { return window.sessionStorage.getItem(SESSION_KEY) === "active"; }
-    catch (e) { return true; }
-  }
-
-  function enterConsole() {
-    var name = document.getElementById("gateway-name");
-    try {
-      window.sessionStorage.setItem(SESSION_KEY, "active");
-      if (name && name.value.trim()) window.sessionStorage.setItem("autopay_operator", name.value.trim());
-    } catch (e) {}
-    var gate = document.getElementById("gateway");
-    if (gate) gate.classList.add("hidden");
-  }
-
   function endSession() {
-    try { window.sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
     closeMenu();
-    var gate = document.getElementById("gateway");
-    if (gate) gate.classList.remove("hidden");
+    window.location.href = "/";
   }
 
   /* ---------- dial queue ---------- */
@@ -212,13 +192,6 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    if (!sessionActive()) {
-      var gate = document.getElementById("gateway");
-      if (gate) gate.classList.remove("hidden");
-    } else {
-      var g = document.getElementById("gateway");
-      if (g) g.classList.add("hidden");
-    }
     showSection("calls");
     syncQueueUI();
     updateTabTitle();
@@ -281,7 +254,6 @@
   window.closeModal = closeModal;
   window.showSection = showSection;
   window.toggleLogs = toggleLogs;
-  window.enterConsole = enterConsole;
   window.endSession = endSession;
   window.startNext = startNext;
   window.stopActive = stopActive;

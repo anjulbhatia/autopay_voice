@@ -25,22 +25,6 @@
     <script src="https://cdn.jsdelivr.net/npm/animejs/dist/bundles/anime.umd.min.js"></script>
   </head>
   <body class="flex h-screen flex-col overflow-scroll bg-neutral-50 text-neutral-800 antialiased text-[13px]">
-    <!-- ============ SESSION GATEWAY (first paint of every session) ============ -->
-    <div id="gateway" class="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-900 p-4">
-      <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-        <p class="text-[11px] font-bold uppercase tracking-widest text-primary-foreground">Authorized User Access Gateway</p>
-        <h1 class="mt-1 text-xl font-bold tracking-tight text-neutral-900">Merchant Console</h1>
-        <p class="mt-2 text-sm text-neutral-500">Local demo session. All records are synthetic — no real customer data, no real money movement.</p>
-        <label class="mt-4 block text-xs font-medium text-neutral-500">Operator Name
-          <input id="gateway-name" type="text" placeholder="Floor operator" autocomplete="off"
-                 class="mt-1 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm" />
-        </label>
-        <button onclick="enterConsole()"
-                class="mt-4 w-full rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-foreground hover:text-primary">
-          Enter Console
-        </button>
-      </div>
-    </div>
 
     <header class="fixed z-10 w-full shrink-0 border-b border-neutral-200 bg-white/85 backdrop-blur">
       <div class="mx-auto flex h-11 w-full items-center justify-between px-3">
