@@ -211,15 +211,6 @@
     document.getElementById("modal-body").innerHTML = "";
   }
 
-  function fillBaseUrl(scope) {
-    var saved = "";
-    try { saved = window.localStorage.getItem("autopay_base_url") || ""; } catch (e) {}
-    if (!saved) return;
-    (scope || document).querySelectorAll('input[name="base_url"]').forEach(function (input) {
-      if (!input.value) input.value = saved;
-    });
-  }
-
   document.addEventListener("DOMContentLoaded", function () {
     if (!sessionActive()) {
       var gate = document.getElementById("gateway");
@@ -236,7 +227,7 @@
     });
     document.getElementById("modal-backdrop").addEventListener("click", closeModal);
     document.addEventListener("keydown", function (event) {
-      if (event.key === "Escape") { closeModal(); closeSettings(); }
+      if (event.key === "Escape") { closeModal(); }
     });
     document.getElementById("profile-ball").addEventListener("click", function (event) {
       event.stopPropagation();
@@ -261,10 +252,6 @@
       }
     });
 
-    try {
-      var saved = window.localStorage.getItem("autopay_base_url") || "";
-      if (saved) fillBaseUrl(document);
-    } catch (e) {}
     if (window.htmx) {
       document.body.addEventListener("htmx:afterSwap", function (event) {
         if (event.target.id === "console-msg") {
@@ -279,38 +266,11 @@
         }
         if (event.target.id === "queue-table" || event.target.id === "active-call") {
           syncQueueUI();
-          fillBaseUrl(event.target);
         }
       });
 
     }
   });
-
-  function openSettings() {
-    closeMenu();
-    var saved = "";
-    try { saved = window.localStorage.getItem("autopay_base_url") || ""; } catch (e) {}
-    var input = document.getElementById("settings-base-url");
-    if (!saved && input && !input.value) {
-      document.getElementById("settings-modal").classList.remove("hidden");
-      return;
-    }
-    if (input) input.value = saved || input.value;
-    document.getElementById("settings-modal").classList.remove("hidden");
-  }
-
-  function closeSettings() {
-    document.getElementById("settings-modal").classList.add("hidden");
-  }
-
-  function saveSettings() {
-    var value = document.getElementById("settings-base-url").value.trim();
-    try { window.localStorage.setItem("autopay_base_url", value); } catch (e) {}
-    document.querySelectorAll('input[name="base_url"]').forEach(function (input) {
-      input.value = value;
-    });
-    closeSettings();
-  }
 
   function closeMenu() {
     var menu = document.getElementById("profile-menu");
@@ -321,9 +281,6 @@
   window.closeModal = closeModal;
   window.showSection = showSection;
   window.toggleLogs = toggleLogs;
-  window.openSettings = openSettings;
-  window.closeSettings = closeSettings;
-  window.saveSettings = saveSettings;
   window.enterConsole = enterConsole;
   window.endSession = endSession;
   window.startNext = startNext;

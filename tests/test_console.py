@@ -27,9 +27,8 @@ def test_console_flows(tmp_path, monkeypatch):
     assert "ingest_customers_data" in client.get("/partials/events").text
 
     link = client.post("/partials/links", json={"customer_id": "CUST001", "kind": "pay_now",
-                                                "channel": "whatsapp", "ttl": 10,
-                                                "base_url": "https://base.test"}).text
-    assert "https://base.test/pay/" in link and "copy" in link and "mock-sent" in link
+                                                "channel": "whatsapp", "ttl": 10}).text
+    assert "http://127.0.0.1:8800/pay/" in link and "copy" in link and "mock-sent" in link
 
     started = client.post("/partials/queue/start", json={"customer_id": "CUST002"})
     assert "open" in started.text

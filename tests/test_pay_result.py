@@ -26,7 +26,7 @@ def test_pay_result_flow(tmp_path, monkeypatch):
     make_link(conn, "tok-failed")
     make_link(conn, "tok-old", expires="2020-01-01T00:00:00+00:00")
     conn.close()
-    client = TestClient(api.app)
+    client = TestClient(api.pay_app)
 
     assert client.post("/pay/result", json={"token": "nope", "outcome": "paid"}).status_code == 404
 

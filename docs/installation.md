@@ -1,6 +1,6 @@
 # Installation
 
-Prereqs: Python 3.13+, `uv`, and (for public links) `cloudflared`.
+Prereqs: Python 3.13+ and `uv`.
 
 ```sh
 uv sync
@@ -9,20 +9,20 @@ cp .env.example .env   # then fill VAPI_API_KEY for real calls
 
 | Command | What it does |
 |---|---|
-| `uv run autopay` | seed db if missing, serve api + pay page + merchant console on `:8000` |
+| `uv run autopay` | seed db if missing, serve merchant console on `:8000` + pay page on `:8800` |
 | `uv run autopay test` | pytest |
 | `uv run autopay help` | full help |
 
 Seed explicitly: `uv run python -m app.db` (idempotent).
 Override the db path: `DATABASE_URL="sqlite:///data/autopay_voice.db"`.
 
-## Tour (one server, three surfaces)
+## Tour (two servers, three surfaces)
 
 | URL | Surface |
 |---|---|
 | `http://127.0.0.1:8000/console` | merchant console: queue, live calls, links, handoffs, audit |
-| `http://127.0.0.1:8000/pay/<token>` | customer payment page (token from a generated link) |
-| `POST /vapi/tool` · `POST /vapi/events` | voice webhooks (in-call dispatch, end-of-call report) |
+| `http://127.0.0.1:8800/pay/<token>` | customer payment page (token from a generated link) |
+| `POST 127.0.0.1:8000/vapi/tool` · `POST 127.0.0.1:8000/vapi/events` | voice webhooks (in-call dispatch, end-of-call report) |
 
 Calls start from the console only (`POST /partials/queue/start`);
 there is no auto-dialer.
@@ -38,20 +38,16 @@ there is no auto-dialer.
   call audit), handoffs, audit log; each with its own filter.
 
 Voice wiring: transient per-call assistant built by `app/provider.py`
-(`vapi-server-sdk`, 6 inline function tools → `BASE_URL/vapi/tool`) from the
-`app/agent.py` prompt — reference shape in `agent/vapi_config.json`, replace
-`BASE_URL` with the deployed origin. Webhooks: `POST /vapi/tool` (in-call
+(`vapi-server-sdk`, 6 inline function tools → `http://127.0.0.1:8000/vapi/tool`) from the
+`app/agent.py` prompt — reference shape in `agent/vapi_config.json`.
+Webhooks: `POST /vapi/tool` (in-call
 dispatch, always 200 with a `results` array) · `POST /vapi/events`
 (end-of-call transcript + guardrail scan). Full contract:
 [voice provider](voice-provider.md).
 
-## Public payment links (demo)
+## Payment links (local)
 
-```sh
-cloudflared tunnel --url http://127.0.0.1:8000
-```
-
-Share `https://<tunnel>/pay/<6-char-token>`. Tokens are minted by
-`create_payment_link()` and die after 10 minutes or first paid use.
-Quick tunnels are account-less with no uptime guarantee — demo only.
+Tokens are minted by `create_payment_link()` as
+`http://127.0.0.1:8800/pay/<6-char-token>` and die after 10 minutes
+or first paid use.
 6-char tokens are enumerable; never use them for real money.

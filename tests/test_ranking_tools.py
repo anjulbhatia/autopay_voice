@@ -50,14 +50,13 @@ def test_verify_gate_and_links(tmp_path):
 
     seen = set()
     for _ in range(20):
-        link = tools.create_payment_link("CUST099", base_url="https://x.test", conn=conn,
-                                         reuse_live=False)
+        link = tools.create_payment_link("CUST099", conn=conn, reuse_live=False)
         assert len(link["token"]) == 6 and link["token"] not in seen
         seen.add(link["token"])
-    assert link["url"].startswith("https://x.test/pay/")
+    assert link["url"].startswith("http://127.0.0.1:8800/pay/")
     ctx = tools.get_link_context(link["token"], conn)
     assert ctx["status"] == "ok" and 0 < ctx["expires_in"] <= 600
-    again = tools.create_payment_link("CUST099", base_url="https://x.test", conn=conn)
+    again = tools.create_payment_link("CUST099", conn=conn)
     assert again["token"] == link["token"] and again.get("reused") is True
     try:
         tools.create_payment_link("CUST099", ttl_minutes=-1, conn=conn)

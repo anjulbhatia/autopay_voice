@@ -29,7 +29,7 @@ flowchart TB
     agentm -->|"system prompt + server tools"| vapi
     vapi -->|"/vapi/tool · /vapi/events"| tools
     tools --> db
-    tools -->|"6-char link, BaseURL/pay/*"| page
+    tools -->|"6-char link, :8800/pay/*"| page
     page -->|"/pay/result paid/failed"| tools
     tools -->|"open handoff"| human
     human --> console
@@ -116,20 +116,22 @@ transient assistant, and `prov` parses webhook envelopes for `api`.
   verification, anti-hallucination).
 - `app/provider.py` — Vapi wrapper on `vapi-server-sdk` (transient assistant,
   function tools, web/phone start, webhook parsing). See `voice-provider.md`.
-- `app/api.py` — pages (`/console`, `/pay/{token}`), HTMX partials
-  (`/partials/*`), Vapi webhooks (`/vapi/tool`, `/vapi/events`).
+- `app/api.py` — console server (`app`, `:8000`: `/console`,
+  `/partials/*`, Vapi webhooks `/vapi/tool` + `/vapi/events`) and pay
+  server (`pay_app`, `:8800`: `/pay/test`, `/pay/{token}`,
+  `/pay/result`). Same SQLite underneath.
 - `app/dash.py` — console view-models, data only (no HTML).
   Markup lives in `web/partials/*.html` (Jinja components, htmx-swapped);
   `app/api.py` renders them. Phones masked, values escaped by Jinja.
 - `app/channels.py` — link delivery adapters (console default, mock
   whatsapp/sms documented).
-- `app/cli.py` — `autopay` launcher: single serve path for api +
-  pay page + console, plus `test` and `mcp`.
+- `app/cli.py` — `autopay` launcher: serve (console on `:8000` + pay page
+  on `:8800`), plus `test` and `mcp`.
 - `web/console.html` — merchant console shell: KPI strips, dial bar,
   queue, on-call rail, customers, observe. Mobile: on-call first,
   bottom nav bar.
 - `web/assets/console.js` — nav, ordered dial queue (localStorage),
-  active-call refresh, modal, settings.
+  active-call refresh, modal.
 - `web/pay.html` — customer payment page; `validations.js` (pure checks)
   + `app.js` (steps, animations, backend notify).
 
@@ -152,13 +154,9 @@ Forms post urlencoded (htmx) or JSON (tests); the server accepts both.
 ## Link lifecycle
 
 `create_payment_link()` mints 6 unambiguous chars, `expires_at = now+10min`,
-`payment_status → link_sent`. Page countdown is server-synced (`expires_in`).
+`payment_status → link_sent`, URL fixed to
+`http://127.0.0.1:8800/pay/[token]` (pay server, `app/config.py`).
+Page countdown is server-synced (`expires_in`).
 `POST /pay/result` with `paid` burns the link (`used_at`) and marks
 `recovered`; `failed` only audits so the link stays retryable. Unknown
 tokens 404 everywhere.
-
-## Base URL
-
-Pass the public origin explicitly (`create_payment_link(..., base_url=...)`)
-so links render as `BaseURL/pay/[token]`. Local default is a relative path.
-The console stores it per-browser (Settings) and fills link forms with it.

@@ -5,8 +5,10 @@ import sys
 from pathlib import Path
 
 root = Path(__file__).resolve().parent.parent
-backend_cmd = [sys.executable, "-m", "uvicorn", "app.api:app",
+console_cmd = [sys.executable, "-m", "uvicorn", "app.api:app",
                "--host", "127.0.0.1", "--port", "8000"]
+pay_cmd = [sys.executable, "-m", "uvicorn", "app.api:pay_app",
+           "--host", "127.0.0.1", "--port", "8800"]
 
 
 def ensure_db():
@@ -16,8 +18,17 @@ def ensure_db():
 
 def serve():
     ensure_db()
-    print("api + pay page + merchant console: http://127.0.0.1:8000/console")
-    subprocess.run(backend_cmd, cwd=root)
+    print("merchant console: http://127.0.0.1:8000/console")
+    print("customer pay page: http://127.0.0.1:8800/pay/<token>")
+    console = subprocess.Popen(console_cmd, cwd=root)
+    pay = subprocess.Popen(pay_cmd, cwd=root)
+    try:
+        console.wait()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        pay.terminate()
+        console.terminate()
 
 
 def test():

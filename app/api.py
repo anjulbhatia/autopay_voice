@@ -12,15 +12,26 @@ from pydantic import BaseModel
 from app.db import get_conn, utcnow
 from app import agent as agent_rules
 from app import channels, dash, provider, tools
-from app.config import MAX_LINK_TTL, MIN_LINK_TTL, VALID_LINK_CHANNELS, VALID_LINK_KINDS, base_url
+from app.config import (CONSOLE_PORT, MAX_LINK_TTL, MIN_LINK_TTL, PAY_PORT,
+                        VALID_LINK_CHANNELS, VALID_LINK_KINDS, console_base)
 from app.utils import mask_phone
 
 web_dir = Path(__file__).resolve().parent.parent / "web"
 
-app = FastAPI(title="autopay_voice (synthetic demo)")
+# Console server (:8000): merchant console, HTMX partials, Vapi webhooks.
+app = FastAPI(title="autopay_voice console (synthetic demo)")
+
+# Pay server (:8800): customer payment page only. Same SQLite underneath.
+pay_app = FastAPI(title="autopay_voice pay (synthetic demo)")
 
 app.mount("/assets", StaticFiles(directory=web_dir / "assets"), name="assets")
+pay_app.mount("/assets", StaticFiles(directory=web_dir / "assets"), name="pay-assets")
 templates = Jinja2Templates(directory=web_dir)
+
+
+@pay_app.get("/")
+async def pay_root():
+    return RedirectResponse(url=console_base() + "/console")
 
 
 async def _payload(request: Request) -> dict:
@@ -61,7 +72,7 @@ class pay_result_in(BaseModel):
     ref: Optional[str] = None
 
 
-@app.post("/pay/result")
+@pay_app.post("/pay/result")
 async def pay_result(body: pay_result_in):
     """Customer page reports a terminal outcome. Paid burns the link (single-use)
     and marks recovery; failed only audits so the same link stays retryable."""
@@ -123,8 +134,7 @@ async def vapi_tool(request: Request):
                 elif name == "get_failed_payment":
                     payload = tools.get_failed_payment(call_id, conn)
                 elif name == "send_payment_link":
-                    payload = tools.send_payment_link(call_id, args.get("channel", "console"),
-                                                      base_url(), conn)
+                    payload = tools.send_payment_link(call_id, args.get("channel", "console"), conn)
                 elif name == "schedule_retry":
                     payload = tools.schedule_retry(call_id, args.get("when"), conn)
                 elif name == "request_human_handoff":
@@ -179,7 +189,7 @@ async def vapi_events(request: Request):
         conn.close()
 
 
-@app.get("/pay/test")
+@pay_app.get("/pay/test")
 async def pay_test(customer_id: str = "CUST001"):
     """Test-only backdoor: mint a fresh link and redirect to the pay page.
 
@@ -195,12 +205,12 @@ async def pay_test(customer_id: str = "CUST001"):
         conn.close()
     if person is None:
         raise HTTPException(status_code=404, detail="unknown customer")
-    link = tools.create_payment_link(customer_id, "pay_now", "console", None, 10,
+    link = tools.create_payment_link(customer_id, "pay_now", "console", 10,
                                      None, reuse_live=False)
     return RedirectResponse(url=link["url"], status_code=303)
 
 
-@app.get("/pay/{token}", response_class=HTMLResponse)
+@pay_app.get("/pay/{token}", response_class=HTMLResponse)
 async def pay_page(request: Request, token: str):
     # Real link lookup: unknown -> 404, used/expired -> dismissed render
     # (no amount/phone on dead links). currency drives Jinja symbol (INR -> ₹).
@@ -272,7 +282,6 @@ async def console_page(request: Request):
         "reason": reason_map.get(c["customer_id"], ""),
     } for c in customers]
     customers.sort(key=lambda c: (not c["eligible"], c["customer_id"]))
-    base_default = base_url()
     dest_hint = mask_phone(provider.test_destination("")) if provider.test_destination("") else ""
     return templates.TemplateResponse(
         request=request, name="console.html",
@@ -281,7 +290,7 @@ async def console_page(request: Request):
                  "call_count": calls, "open_handoffs": open_handoffs,
                  "queue_count": queue_count, "failed_count": funnel.get("failed", 0),
                  "at_risk": f"{at_risk:,.0f}", "open_calls": open_calls,
-                 "default_base": base_default, "dest_hint": dest_hint})
+                 "dest_hint": dest_hint})
 
 
 @app.get("/partials/queue", response_class=HTMLResponse)
@@ -333,7 +342,7 @@ async def partial_start(request: Request):
             return _msg(request, "phone mode needs the confirm checkbox (only call numbers you control)",
                         good=False)
         try:
-            placed = provider.start_phone_call(prompt, base_url(),
+            placed = provider.start_phone_call(prompt, console_base(),
                                                body.get("to_number", ""),
                                                confirm=True)
             _bind_vapi(started["call_id"], placed.get("id", ""))
@@ -342,7 +351,7 @@ async def partial_start(request: Request):
         except Exception as exc:  # provider errors stay in-app, row stays open
             return _msg(request, f"call {started['call_id']} open but dial failed: {exc}", good=False)
     try:
-        placed = provider.start_web_call(prompt, base_url() or "https://example.test")
+        placed = provider.start_web_call(prompt, console_base())
     except Exception:  # no key / offline: internal row only, same as before
         return _msg(request, f"call {started['call_id']} open ({started['tier']}, p={started['p_pay']})")
     _bind_vapi(started["call_id"], placed.get("id", ""))
@@ -509,15 +518,8 @@ async def partial_link(request: Request):
     if person is None:
         raise HTTPException(status_code=404, detail="unknown customer")
     try:
-        # Explicit base_url (console settings field) wins when it is a plain
-        # https origin; otherwise server BASE_URL env. Relative path when neither.
-        raw_base = (body.get("base_url") or "").strip() if isinstance(body.get("base_url"), str) else ""
-        if raw_base and not (raw_base.startswith("https://") and " " not in raw_base
-                             and '"' not in raw_base and "<" not in raw_base):
-            return _msg(request, "bad base_url (https:// origin required)", good=False)
         link = tools.create_payment_link(customer_id, body.get("kind", "pay_now"), channel,
-                                         raw_base or base_url() or None, ttl,
-                                         call_id=call_id)
+                                         ttl, call_id=call_id)
     except ValueError as exc:
         return _msg(request, str(exc), good=False)
     text = channels.render(channel, person["name"], person["amount_due"], link["url"])

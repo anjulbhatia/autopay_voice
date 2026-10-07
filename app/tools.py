@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from app import agent as agent_rules, channels, ranking
 from app.config import (DEFAULT_TTL_MINUTES, MAX_LINK_TTL, MAX_VERIFY_ATTEMPTS, MIN_LINK_TTL,
                          TOKEN_ALPHABET, TOKEN_LENGTH, VALID_CALL_OUTCOMES, VALID_LINK_CHANNELS,
-                         VALID_LINK_KINDS, base_url as server_base_url)
+                         VALID_LINK_KINDS, pay_base)
 from app.db import (count_calls_today, get_conn, init_db, repo_root,
                     seed_from_json, utcnow, verify_security_answer)
 from app.utils import mask_phone
@@ -159,25 +159,21 @@ def mint_token(conn, length=TOKEN_LENGTH):
     raise RuntimeError("token space exhausted")
 
 
-def create_payment_link(customer_id, kind="pay_now", channel="console", base_url_override=None,
+def create_payment_link(customer_id, kind="pay_now", channel="console",
                         ttl_minutes=DEFAULT_TTL_MINUTES, call_id=None, conn=None,
-                        reuse_live=True, **kwargs):
-    """Mint a single-use expiring link. base_url falls back to $BASE_URL
-    (the cloudflared origin); empty means a relative /pay path for local use."""
+                        reuse_live=True):
+    """Mint a single-use expiring link on the pay server (:8800)."""
     if kind not in VALID_LINK_KINDS:
         raise ValueError(f"unknown link kind {kind!r}")
     if channel not in VALID_LINK_CHANNELS:
         raise ValueError(f"unknown channel {channel!r}")
-    # Back-compat: older callers pass base_url= as keyword.
-    if base_url_override is None and "base_url" in kwargs:
-        base_url_override = kwargs["base_url"]
     try:
         ttl_minutes = int(ttl_minutes)
     except (TypeError, ValueError):
         raise ValueError(f"bad ttl {ttl_minutes!r}")
     if not MIN_LINK_TTL <= ttl_minutes <= MAX_LINK_TTL:
         raise ValueError(f"bad ttl {ttl_minutes!r} (1-1440 required)")
-    resolved_base = base_url_override if base_url_override else server_base_url()
+    resolved_base = pay_base()
     own = conn is None
     conn = conn or get_conn()
     try:
@@ -215,7 +211,7 @@ def create_payment_link(customer_id, kind="pay_now", channel="console", base_url
             conn.close()
 
 
-def send_payment_link(call_id, channel="console", base_url=None, conn=None):
+def send_payment_link(call_id, channel="console", conn=None):
     """Voice path: verified calls only, mandate failures get an update-mandate link.
     Renders + mock-sends through the channel adapter so the customer gets
     something, and stamps last_message_at for ranking recency."""
@@ -232,7 +228,7 @@ def send_payment_link(call_id, channel="console", base_url=None, conn=None):
                                 (call["customer_id"],)).fetchone()
         kind = "update_mandate" if kind_row["failure_reason"] == "mandate_expired" else "pay_now"
         link = create_payment_link(
-            call["customer_id"], kind, channel, base_url, DEFAULT_TTL_MINUTES, call_id, conn)
+            call["customer_id"], kind, channel, DEFAULT_TTL_MINUTES, call_id, conn)
         person = conn.execute("select name, phone, amount_due from customers where customer_id = ?",
                               (call["customer_id"],)).fetchone()
         text = channels.render(channel, person["name"], person["amount_due"], link["url"])

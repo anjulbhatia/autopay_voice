@@ -142,7 +142,7 @@ Thin wrapper, no duplicated logic. Read-only tools: `get_ranked_queue`, `get_cam
 
 ```
 uv sync                 # install deps
-uv run autopay          # seed db if missing, serve api + pay page + merchant console on :8000
+uv run autopay          # seed db if missing, serve console on :8000 + pay page on :8800
 uv run autopay test     # pytest
 uv run autopay mcp      # stub: prints planned-last notice (server not built yet)
 uv run autopay help     # full help

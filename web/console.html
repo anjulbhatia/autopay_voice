@@ -61,7 +61,6 @@
             <button id="profile-ball" aria-label="Account" aria-haspopup="true"
                     class="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">M</button>
             <div id="profile-menu" class="hidden absolute right-0 mt-2 w-44 overflow-hidden rounded-lg border border-neutral-200 bg-white text-neutral-800 shadow-xl">
-              <button onclick="openSettings()" class="flex w-full items-center gap-2 px-4 py-2.5 text-sm hover:bg-neutral-100 text-left">Settings</button>
               <button onclick="endSession()" class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 text-left">End Session</button>
             </div>
           </div>
@@ -261,22 +260,6 @@
         <button onclick="closeModal()" aria-label="Close"
                 class="absolute top-4 right-4 h-8 w-8 inline-flex items-center justify-center rounded-full bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 transition-colors">×</button>
         <div id="modal-body" class="text-sm pr-6">Loading…</div>
-      </div>
-    </div>
-
-    <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onclick="closeSettings()"></div>
-      <div class="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-        <h2 class="text-base font-bold tracking-tight text-neutral-900">Settings</h2>
-        <label class="mt-3 block text-xs font-medium text-neutral-500">Public Base URL
-          <input id="settings-base-url" type="text" placeholder="https://<tunnel>.trycloudflare.com" value="{{ default_base }}"
-                 class="mt-1 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm font-mono" />
-        </label>
-        <p class="mt-1 text-xs text-neutral-400">Links render as BaseURL/pay/*. Stored in this browser only.</p>
-        <div class="mt-4 flex justify-end gap-2">
-          <button onclick="closeSettings()" class="rounded-lg border border-neutral-200 px-4 py-2 text-sm">Cancel</button>
-          <button onclick="saveSettings()" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-foreground hover:text-primary">Save</button>
-        </div>
       </div>
     </div>
 

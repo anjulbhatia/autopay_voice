@@ -2,7 +2,7 @@
   "assistant": {
     "name": "autopay-recovery",
     "server": {
-      "url": "BASE_URL/vapi/tool"
+      "url": "http://127.0.0.1:8000/vapi/tool"
     },
     "serverMessages": ["tool-calls", "end-of-call-report"],
     "model": {
@@ -26,7 +26,7 @@
               "required": ["answer"]
             }
           },
-          "server": { "url": "BASE_URL/vapi/tool" }
+          "server": { "url": "http://127.0.0.1:8000/vapi/tool" }
         },
         {
           "type": "function",
@@ -35,7 +35,7 @@
             "description": "Failed payment details. Refuses until verify_identity succeeds.",
             "parameters": { "type": "object", "properties": {} }
           },
-          "server": { "url": "BASE_URL/vapi/tool" }
+          "server": { "url": "http://127.0.0.1:8000/vapi/tool" }
         },
         {
           "type": "function",
@@ -47,7 +47,7 @@
               "properties": { "channel": { "type": "string", "enum": ["console", "whatsapp", "sms"] } }
             }
           },
-          "server": { "url": "BASE_URL/vapi/tool" }
+          "server": { "url": "http://127.0.0.1:8000/vapi/tool" }
         },
         {
           "type": "function",
@@ -60,7 +60,7 @@
               "required": ["when"]
             }
           },
-          "server": { "url": "BASE_URL/vapi/tool" }
+          "server": { "url": "http://127.0.0.1:8000/vapi/tool" }
         },
         {
           "type": "function",
@@ -76,7 +76,7 @@
               "required": ["reason"]
             }
           },
-          "server": { "url": "BASE_URL/vapi/tool" }
+          "server": { "url": "http://127.0.0.1:8000/vapi/tool" }
         },
         {
           "type": "function",
@@ -92,10 +92,10 @@
               "required": ["result"]
             }
           },
-          "server": { "url": "BASE_URL/vapi/tool" }
+          "server": { "url": "http://127.0.0.1:8000/vapi/tool" }
         }
       ]
     }
   },
-  "notes": "Reference shape for dashboard/CLI import (function tools per docs.vapi.ai/tools/custom-tools, transient assistant per call). Live calls build this in code via app/provider.py build_assistant (vapi-server-sdk) — replace BASE_URL with the deployed origin (e.g. the cloudflared URL). System prompt is assembled per call, never pasted here."
+  "notes": "Reference shape for dashboard/CLI import (function tools per docs.vapi.ai/tools/custom-tools, transient assistant per call). Live calls build this in code via app/provider.py build_assistant (vapi-server-sdk), pointed at the local console origin. System prompt is assembled per call, never pasted here."
 }

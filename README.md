@@ -12,18 +12,18 @@ All data in `data/` is synthetic (fake sequential phones
 ```sh
 uv sync
 cp .env.example .env   # fill VAPI_API_KEY for real calls
-uv run autopay              # api + pay page + merchant console on :8000 (seeds db first run)
+uv run autopay              # merchant console on :8000 + pay page on :8800 (seeds db first run)
 uv run autopay test         # tests
 ```
 
 | URL | What |
 |---|---|
 | `http://127.0.0.1:8000/console` | merchant console (HTMX): queue, live calls, links, handoffs, audit |
-| `http://127.0.0.1:8000/pay/<token>` | customer payment page (token from a generated link) |
+| `http://127.0.0.1:8800/pay/<token>` | customer payment page (token from a generated link) |
 
 Calls start from the console only — queue checkbox order, dial bar, or
 per-row Start. See [installation](docs/installation.md) for the console
-tour, voice wiring, and public-link setup.
+tour and voice wiring.
 
 ## How it works
 
@@ -40,7 +40,7 @@ tour, voice wiring, and public-link setup.
    [call workflow](docs/call-workflow.md).
 
 ```
-browser (/console, /pay/*) ──► FastAPI (api.py renders web/partials via dash.py view-models)
+browser (/console on :8000, /pay/* on :8800) ──► FastAPI (api.py renders web/partials via dash.py view-models)
                                     │  ▲
 Vapi (/vapi/tool, /vapi/events) ────┘  │  shared logic (tools.py, ranking.py)
                                        ▼

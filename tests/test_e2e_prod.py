@@ -29,7 +29,7 @@ def live_client(tmp_path, monkeypatch, name="e2e.db"):
     )
     conn.commit()
     conn.close()
-    return TestClient(api.app)
+    return TestClient(api.app), TestClient(api.pay_app)
 
 
 def vapi_tool(client, vapi_id, tid, name, args):
@@ -41,21 +41,22 @@ def vapi_tool(client, vapi_id, tid, name, args):
 
 
 def test_pay_test_backdoor_gated(tmp_path, monkeypatch):
-    client = live_client(tmp_path, monkeypatch, "e2e-gate.db")
+    _, pay = live_client(tmp_path, monkeypatch, "e2e-gate.db")
     monkeypatch.delenv("ALLOW_TEST_ROUTES", raising=False)
-    assert client.get("/pay/test").status_code == 404
+    assert pay.get("/pay/test").status_code == 404
 
     monkeypatch.setenv("ALLOW_TEST_ROUTES", "1")
-    r = client.get("/pay/test", follow_redirects=False)
+    r = pay.get("/pay/test", follow_redirects=False)
     assert r.status_code == 303
-    assert "/pay/" in r.headers["location"]
-    page = client.get(r.headers["location"])
+    assert r.headers["location"].startswith("http://127.0.0.1:8800/pay/")
+    token = r.headers["location"].rsplit("/pay/", 1)[1]
+    page = pay.get(f"/pay/{token}")
     assert page.status_code == 200 and "Demo Merchant" in page.text
-    assert client.get("/pay/test?customer_id=NOPE").status_code == 404
+    assert pay.get("/pay/test?customer_id=NOPE").status_code == 404
 
 
 def test_e2e_prod_recovery(tmp_path, monkeypatch):
-    client = live_client(tmp_path, monkeypatch)
+    client, pay = live_client(tmp_path, monkeypatch)
     monkeypatch.setattr("app.agent.calling_allowed", lambda now=None: True)
     monkeypatch.setattr("app.api.provider.start_web_call",
                         lambda prompt, base: {"id": "vapi-e2e-1",
@@ -83,11 +84,11 @@ def test_e2e_prod_recovery(tmp_path, monkeypatch):
     assert "error" not in sent
     token = sent["result"].split("/pay/")[1].split('"')[0]
 
-    # Customer: open link, pay.
-    assert client.get(f"/pay/{token}").status_code == 200
-    paid = client.post("/pay/result", json={"token": token, "outcome": "paid", "method": "upi"})
+    # Customer on :8800: open link, pay.
+    assert pay.get(f"/pay/{token}").status_code == 200
+    paid = pay.post("/pay/result", json={"token": token, "outcome": "paid", "method": "upi"})
     assert paid.status_code == 200 and paid.json()["payment_status"] == "recovered"
-    assert client.post("/pay/result", json={"token": token, "outcome": "paid"}).status_code == 409
+    assert pay.post("/pay/result", json={"token": token, "outcome": "paid"}).status_code == 409
 
     # Voice: close call, end-of-call report must not clobber outcome.
     vapi_tool(client, vid, "t5", "log_outcome", {"result": "link_sent"})

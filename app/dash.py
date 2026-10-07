@@ -2,7 +2,6 @@
 import json as jsonlib
 
 from app import tools
-from app.config import base_url as server_base_url
 from app.db import get_conn
 from app.utils import mask_phone, parse_reasons
 
@@ -94,7 +93,6 @@ def active_call_data():
             "verified": bool(r["verified"]),
             "vals_json": _vals(call_id=r["call_id"]),
             "reasons": "; ".join(parse_reasons(r.get("score_reasons"))),
-            "base_default": server_base_url(),
         }
     finally:
         conn.close()

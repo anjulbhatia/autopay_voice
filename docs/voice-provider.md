@@ -33,14 +33,14 @@ model, messages, tools}` + `server: {url}` + `serverMessages:
 fit when the system message differs every call (per-customer tier prompt
 here). Nothing is stored server-side; `agent/vapi_config.json` mirrors the
 same shape as a reference for dashboard Talk-button testing (paste
-`BASE_URL`, attach tools, Talk). Assistant/tool payloads validate against
+the console origin `http://127.0.0.1:8000`, attach tools, Talk). Assistant/tool payloads validate against
 the installed SDK DTOs (`CreateAssistantDto`,
 `OpenAiModelToolsItem_Function`, `CreateCustomerDto`).
 
 ## Tools
 
 Six inline **function tools** (`model.tools[]`), one `server.url` each
-pointing at `BASE_URL/vapi/tool` (webhook precedence per docs:
+pointing at `http://127.0.0.1:8000/vapi/tool` (webhook precedence per docs:
 tool url → assistant url → number url → org url):
 
 `verify_identity`, `get_failed_payment`, `send_payment_link`,

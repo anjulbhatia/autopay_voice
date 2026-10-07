@@ -3,9 +3,12 @@
 Backend package. Every module keeps a 1–2 line docstring; the notes below
 are the longer context that used to live in file headers.
 
-- `api.py` — FastAPI hub. Pages (`/console`, `/pay/{token}`), HTMX partials
-  (`/partials/*` rendered from `web/partials/` via `dash` view-models),
-  Vapi webhooks (`/vapi/tool` results envelope, `/vapi/events` report).
+- `api.py` — FastAPI hub. Console server (`app`, `:8000`: `/console`,
+  `/partials/*`, Vapi webhooks) + pay server (`pay_app`, `:8800`:
+  `/pay/*`). Same SQLite underneath.
+- `dash.py` — console view-models, data only. Queries DB, masks phones,
+  pre-formats labels/pills/currency. Jinja autoescape handles escaping;
+  `hx-vals` JSON uses `|safe` on id-only payloads.
 - `dash.py` — console view-models, data only. Queries DB, masks phones,
   pre-formats labels/pills/currency. Jinja autoescape handles escaping;
   `hx-vals` JSON uses `|safe` on id-only payloads.
@@ -13,7 +16,7 @@ are the longer context that used to live in file headers.
   retry, handoffs, outcomes, audit). FastAPI and (planned) MCP share it.
   Voice tools bind `call_id`, never a customer id from the model.
 - `provider.py` — Vapi on `vapi-server-sdk`, no raw REST. Transient assistant
-  per call, 6 inline function tools → `BASE_URL/vapi/tool`. Full contract:
+  per call, 6 inline function tools → console `/vapi/tool`. Full contract:
   `docs/voice-provider.md` (shapes verified 2026-10-04, re-check Vapi docs
   before changing payloads). `start_*` accept `client=` for offline tests.
 - `agent.py` — framework-agnostic voice policy: prompt assembly (pre-verify
@@ -34,6 +37,6 @@ are the longer context that used to live in file headers.
 - `channels.py` — link message templates + mock send (always `mock-sent`;
   real delivery needs business accounts, templates, consent). Callers must
   pass an already-masked `to_label` — raw numbers never reach logs here.
-- `cli.py` — `autopay` launcher: serve (seed-if-missing + uvicorn),
+- `cli.py` — `autopay` launcher: serve (console `:8000` + pay `:8800`),
   test (pytest), mcp (stub, planned last), help.
 - `utils.py` — `esc`, `mask_phone`, `parse_reasons` (never raises).
