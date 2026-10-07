@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from typing import Literal, Optional
 
@@ -176,6 +177,27 @@ async def vapi_events(request: Request):
         return {"ok": True, "judge": verdict}
     finally:
         conn.close()
+
+
+@app.get("/pay/test")
+async def pay_test(customer_id: str = "CUST001"):
+    """Test-only backdoor: mint a fresh link and redirect to the pay page.
+
+    Gated by ALLOW_TEST_ROUTES=1, 404 otherwise. Never enabled in prod.
+    Exists so QA/dev can open a live pay page without driving voice."""
+    if os.environ.get("ALLOW_TEST_ROUTES", "") != "1":
+        raise HTTPException(status_code=404, detail="not found")
+    conn = get_conn()
+    try:
+        person = conn.execute("select customer_id from customers where customer_id = ?",
+                              (customer_id,)).fetchone()
+    finally:
+        conn.close()
+    if person is None:
+        raise HTTPException(status_code=404, detail="unknown customer")
+    link = tools.create_payment_link(customer_id, "pay_now", "console", None, 10,
+                                     None, reuse_live=False)
+    return RedirectResponse(url=link["url"], status_code=303)
 
 
 @app.get("/pay/{token}", response_class=HTMLResponse)
