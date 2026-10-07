@@ -191,9 +191,21 @@ async def pay_page(request: Request, token: str):
         word = "already used" if found["status"] == "used" else "expired"
         return HTMLResponse(
             status_code=code,
-            content=(f"<main style='font-family:sans-serif;max-width:480px;margin:10vh auto;text-align:center'>"
-                     f"<h1>Link {word}</h1>"
-                     f"<p>This payment link is {word}. Please request a fresh link.</p></main>"),
+            content=(f"<!doctype html><html><head><meta charset='UTF-8'>"
+                     f"<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
+                     f"<title>Link {word} | AutoPay</title>"
+                     f"<script src='https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4'></script>"
+                     f"</head><body style='font-family:sans-serif;background:#fafafa'>"
+                     f"<main style='max-width:440px;margin:12vh auto;text-align:center;"
+                     f"background:#fff;border:1px solid #e5e5e5;border-radius:16px;padding:32px 24px'>"
+                     f"<p style='display:inline-block;font-size:11px;font-weight:700;color:#2b0a49;"
+                     f"background:#e4c5ff;border-radius:999px;padding:4px 12px'>AUTOPAY DEMO</p>"
+                     f"<h1 style='margin:12px 0 8px'>Link {word}</h1>"
+                     f"<p style='color:#525252;font-size:14px'>This payment link is {word}. "
+                     f"Please request a fresh link from the merchant.</p>"
+                     f"<a href='/console' style='display:inline-block;margin-top:16px;background:#e4c5ff;"
+                     f"color:#2b0a49;font-weight:600;border-radius:999px;padding:8px 20px;"
+                     f"text-decoration:none'>Back to Merchant Console</a></main></body></html>"),
         )
     customer = found["customer"]
     return templates.TemplateResponse(
@@ -227,7 +239,14 @@ async def console_page(request: Request):
     queue = campaign_tools.masked_queue()
     queue_count = len(queue["eligible"])
     eligible_ids = {c["customer_id"] for c in queue["eligible"]}
-    customers.sort(key=lambda c: (c["customer_id"] not in eligible_ids, c["customer_id"]))
+    reason_map = {c["customer_id"]: c.get("reason", "") for c in queue.get("ineligible", [])}
+    customers = [{
+        "customer_id": c["customer_id"],
+        "name": c["name"],
+        "eligible": c["customer_id"] in eligible_ids,
+        "reason": reason_map.get(c["customer_id"], ""),
+    } for c in customers]
+    customers.sort(key=lambda c: (not c["eligible"], c["customer_id"]))
     base_default = base_url()
     dest_hint = mask_phone(provider.test_destination("")) if provider.test_destination("") else ""
     return templates.TemplateResponse(

@@ -113,9 +113,9 @@
 
           <div class="shrink-0 rounded-xl border border-neutral-200 bg-white p-2.5 w-full mb-2">
             <form id="dial-form" hx-post="/partials/queue/start" hx-target="#console-msg" hx-swap="innerHTML" class="flex flex-wrap items-center gap-1.5">
-              <select id="dial-cid" name="customer_id" title="Customer to call"
+              <select id="dial-cid" name="customer_id" title="Customer to call. ✓ eligible, ✕ shows suppression reason."
                       class="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs max-w-48">
-                {% for c in customers %}<option value="{{ c['customer_id'] }}">{{ c['customer_id'] }} — {{ c['name'] }}</option>{% endfor %}
+                {% for c in customers %}<option value="{{ c['customer_id'] }}">{% if c['eligible'] %}✓ {% else %}✕ {% endif %}{{ c['customer_id'] }} — {{ c['name'] }}{% if not c['eligible'] %} ({{ c['reason'] }}){% endif %}</option>{% endfor %}
               </select>
               <select id="dial-mode" name="mode" title="Web opens an internal call row. Phone also dials via Vapi."
                       class="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs">
