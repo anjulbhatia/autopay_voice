@@ -42,6 +42,7 @@ def assemble_prompt(customer, tier, verified, reasons=()):
         f"customer first name: {name}",
         f"tier: {tier} ({tier_empathy[tier]})",
         f"failure in plain words: {plain_reason(customer['failure_reason'])}",
+        f"security question to ask (exact wording): {customer['security_question'] or 'Please confirm your year of birth.'}",
     ]
     if verified:
         context += [

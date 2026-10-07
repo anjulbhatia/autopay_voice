@@ -19,6 +19,9 @@ def test_prompt_leaks_nothing_pre_verify(tmp_path):
     assert row["past_call_notes"] not in pre
     assert row["phone"] not in pre
     assert "ANTI-HALLUCINATION" in pre
+    assert row["security_question"] in pre  # askable, question text only
+    assert row["security_answer_hash"] not in pre
+    assert "I am an AI agent for the merchant. I am unable to answer that." in pre
     post = agent.assemble_prompt(row, "standard", True, ["r1"])
     assert str(row["amount_due"]) in post
     conn.close()
