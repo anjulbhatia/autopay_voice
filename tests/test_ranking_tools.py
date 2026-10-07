@@ -50,18 +50,21 @@ def test_verify_gate_and_links(tmp_path):
 
     seen = set()
     for _ in range(20):
-        link = tools.create_payment_link("CUST099", base_url="https://x.test", conn=conn)
+        link = tools.create_payment_link("CUST099", base_url="https://x.test", conn=conn,
+                                         reuse_live=False)
         assert len(link["token"]) == 6 and link["token"] not in seen
         seen.add(link["token"])
     assert link["url"].startswith("https://x.test/pay/")
     ctx = tools.get_link_context(link["token"], conn)
     assert ctx["status"] == "ok" and 0 < ctx["expires_in"] <= 600
+    again = tools.create_payment_link("CUST099", base_url="https://x.test", conn=conn)
+    assert again["token"] == link["token"] and again.get("reused") is True
     try:
         tools.create_payment_link("CUST099", ttl_minutes=-1, conn=conn)
         assert False, "negative ttl must raise"
     except ValueError:
         pass
-    old = tools.create_payment_link("CUST099", ttl_minutes=1, conn=conn)
+    old = tools.create_payment_link("CUST099", ttl_minutes=1, conn=conn, reuse_live=False)
     conn.execute("update payment_links set expires_at = '2000-01-01T00:00:00+00:00' where token = ?",
                  (old["token"],))
     conn.commit()

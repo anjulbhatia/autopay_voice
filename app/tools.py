@@ -161,7 +161,7 @@ def mint_token(conn, length=TOKEN_LENGTH):
 
 def create_payment_link(customer_id, kind="pay_now", channel="console", base_url_override=None,
                         ttl_minutes=DEFAULT_TTL_MINUTES, call_id=None, conn=None,
-                        **kwargs):
+                        reuse_live=True, **kwargs):
     """Mint a single-use expiring link. base_url falls back to $BASE_URL
     (the cloudflared origin); empty means a relative /pay path for local use."""
     if kind not in VALID_LINK_KINDS:
@@ -182,6 +182,21 @@ def create_payment_link(customer_id, kind="pay_now", channel="console", base_url
     conn = conn or get_conn()
     try:
         now = datetime.now(timezone.utc)
+        if reuse_live:
+            live = conn.execute(
+                "select token, expires_at from payment_links where customer_id = ? and kind = ?"
+                " and used_at is null and expires_at > ? order by created_at desc limit 1",
+                (customer_id, kind, now.isoformat()),
+            ).fetchone()
+            if live is not None:
+                log_audit(conn, "agent" if call_id else "merchant", "create_payment_link",
+                          json.dumps({"token": live["token"][:2] + "…", "kind": kind,
+                                      "channel": channel, "reused": True}), "ok", call_id)
+                conn.commit()
+                url = f"{resolved_base.rstrip('/')}/pay/{live['token']}" if resolved_base \
+                    else f"/pay/{live['token']}"
+                return {"token": live["token"], "url": url,
+                        "expires_at": live["expires_at"], "reused": True}
         token = mint_token(conn)
         expires = (now + timedelta(minutes=ttl_minutes)).isoformat()
         conn.execute(
