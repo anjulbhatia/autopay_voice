@@ -273,7 +273,8 @@ async def partial_active_call(request: Request):
 
 @app.post("/partials/queue/start", response_class=HTMLResponse)
 async def partial_start(request: Request):
-    """Single Start Call button. mode=web opens the internal call row;
+    """Single Start Call button. mode=web opens the internal call row and,
+    when VAPI_API_KEY is set, a provider web call (URL returned for join);
     mode=phone additionally dials via Vapi (confirm required)."""
     from app import agent as agent_pkg
     body = await _payload(request)
@@ -284,34 +285,45 @@ async def partial_start(request: Request):
         started = tools.start_call(body.get("customer_id", ""), mode="web", source="dashboard")
     except ValueError as exc:
         return _msg(request, str(exc), good=False)
+    conn = get_conn()
+    try:
+        row = conn.execute("select * from customers where customer_id = ?",
+                           (started["customer_id"],)).fetchone()
+        prompt = agent_pkg.assemble_prompt(row, started["tier"], False, started["reasons"])
+    finally:
+        conn.close()
+
+    def _bind_vapi(call_id, vapi_id):
+        if not vapi_id:
+            return
+        conn = get_conn()
+        try:
+            conn.execute("update calls set vapi_call_id = ? where call_id = ?", (vapi_id, call_id))
+            conn.commit()
+        finally:
+            conn.close()
+
     if mode == "phone":
         if str(body.get("confirm", "")).lower() not in ("true", "1", "on", "yes"):
             return _msg(request, "phone mode needs the confirm checkbox (only call numbers you control)",
                         good=False)
         try:
-            conn = get_conn()
-            try:
-                row = conn.execute("select * from customers where customer_id = ?",
-                                   (started["customer_id"],)).fetchone()
-                prompt = agent_pkg.assemble_prompt(row, started["tier"], False, started["reasons"])
-            finally:
-                conn.close()
             placed = provider.start_phone_call(prompt, base_url(),
                                                body.get("to_number", ""),
                                                confirm=True)
-            vapi_id = placed.get("id", "")
-            conn = get_conn()
-            try:
-                conn.execute("update calls set vapi_call_id = ? where call_id = ?",
-                             (vapi_id, started["call_id"]))
-                conn.commit()
-            finally:
-                conn.close()
+            _bind_vapi(started["call_id"], placed.get("id", ""))
             dest = provider.test_destination(body.get("to_number", ""))
             return _msg(request, f"call {started['call_id']} dialing {mask_phone(dest)}")
         except Exception as exc:  # provider errors stay in-app, row stays open
             return _msg(request, f"call {started['call_id']} open but dial failed: {exc}", good=False)
-    return _msg(request, f"call {started['call_id']} open ({started['tier']}, p={started['p_pay']})")
+    try:
+        placed = provider.start_web_call(prompt, base_url() or "https://example.test")
+    except Exception:  # no key / offline: internal row only, same as before
+        return _msg(request, f"call {started['call_id']} open ({started['tier']}, p={started['p_pay']})")
+    _bind_vapi(started["call_id"], placed.get("id", ""))
+    join_url = placed.get("webCallUrl") or placed.get("web_call_url") or ""
+    suffix = f" — join {join_url}" if join_url else ""
+    return _msg(request, f"call {started['call_id']} open ({started['tier']}, p={started['p_pay']}){suffix}")
 
 
 @app.post("/partials/calls/stop-active", response_class=HTMLResponse)

@@ -50,3 +50,17 @@ def test_console_flows(tmp_path, monkeypatch):
     assert hdetail.status_code == 200 and "human_joined" in hdetail.text
     assert client.get("/partials/handoffs/99999").status_code == 404
     conn.close()
+
+
+def test_web_start_binds_provider_call(tmp_path, monkeypatch):
+    client = live_client(tmp_path, monkeypatch)
+    monkeypatch.setattr("app.agent.calling_allowed", lambda now=None: True)
+    monkeypatch.setattr("app.api.provider.start_web_call",
+                        lambda prompt, base: {"id": "vapi-1", "webCallUrl": "https://vapi.test/c/1"})
+    started = client.post("/partials/queue/start", json={"customer_id": "CUST003", "mode": "web"})
+    assert "open" in started.text and "https://vapi.test/c/1" in started.text
+    conn = get_conn()
+    vapi_id = conn.execute("select vapi_call_id from calls where customer_id = 'CUST003'"
+                           " order by call_id desc limit 1").fetchone()[0]
+    conn.close()
+    assert vapi_id == "vapi-1"
