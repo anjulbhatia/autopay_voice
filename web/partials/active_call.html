@@ -14,13 +14,13 @@
 </div>
 
 <div class='mt-2 grid grid-cols-3 gap-1.5'>
-    <button hx-post='/partials/calls/stop-active' hx-target='#console-msg' hx-swap='innerHTML' class='rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors inline-flex items-center justify-center gap-1' title='Stop the live call'><i class="hgi hgi-stroke hgi-rounded hgi-call-disabled-02 text-lg"></i>
+    <button hx-post='/partials/calls/stop-active' hx-target='#console-msg' hx-swap='innerHTML' class='cursor-pointer rounded-full border border-red-200 bg-red-300/60 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-300 transition-colors inline-flex items-center justify-center gap-1' title='Stop the live call'><i class="hgi hgi-stroke hgi-rounded hgi-call-disabled-02 text-lg"></i>
         Stop
     </button>
-    <button hx-post='/partials/calls/join' hx-vals='{{ call.vals_json|safe }}' hx-target='#console-msg' hx-swap='innerHTML' class='rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 transition-colors inline-flex items-center justify-center gap-1' title='Join and open a handoff'>
+    <button hx-post='/partials/calls/join' hx-vals='{{ call.vals_json|safe }}' hx-target='#console-msg' hx-swap='innerHTML' class='cursor-pointer rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 transition-colors inline-flex items-center justify-center gap-1' title='Join and open a handoff'>
         <i class="hgi hgi-stroke hgi-rounded hgi-customer-support text-lg"></i> Join
     </button>
-    <button hx-get='/partials/calls/{{ call.call_id }}' hx-target='#modal-body' hx-swap='innerHTML' onclick='openModal()' class='rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 transition-colors inline-flex items-center justify-center gap-1' title='Inspect call'>
+    <button hx-get='/partials/calls/{{ call.call_id }}' hx-target='#modal-body' hx-swap='innerHTML' onclick='openModal()' class='cursor-pointer rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 transition-colors inline-flex items-center justify-center gap-1' title='Inspect call'>
         Inspect
     </button>
 </div>
